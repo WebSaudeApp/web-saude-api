@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: websaude
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d websaude"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/websaude
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/websaude
+      CORS_ORIGINS: http://localhost:5173
+      THROTTLE_TTL_MS: '60000'
+      THROTTLE_LIMIT: '1000'
+      SWAGGER_ENABLED: 'false'
+      JWT_ACCESS_SECRET: ci-access-secret-change-me-min-32-chars
+      JWT_REFRESH_SECRET: ci-refresh-secret-change-me-min-32-chars
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:ci
+      - run: npx prisma migrate deploy
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run build

@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AllExceptionsFilter } from './common/http/all-exceptions.filter';
+import { RequestLoggingInterceptor } from './common/http/request-logging.interceptor';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { AdminModule } from './admin/admin.module';
@@ -49,6 +51,14 @@ import { UsersModule } from './users/users.module';
     AuditModule,
   ],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestLoggingInterceptor,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

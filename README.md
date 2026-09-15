@@ -10,8 +10,8 @@ web-saude/
 └── web-saude-ui/
 ```
 
-**Versão atual:** `0.0.1` — **FASE 6 (admin)** concluída.  
-Fases 1–6 prontas. CI/CD, logs avançados e 2FA ainda **não** estão implementados.
+**Versão atual:** `0.0.1` — **FASE 7 (qualidade)** concluída.  
+Fases 1–7 prontas. 2FA e avisos in-app ficam como endurecimento futuro.
 
 ---
 
@@ -76,7 +76,7 @@ Visitantes podem pesquisar sem conta.
 | Favoritos e avaliações | Pronto — FASE 4 |
 | Fluxo do gestor | Pronto — FASE 5 |
 | Painel admin | Pronto — FASE 6 |
-| CI/CD, logs avançados, 2FA | Pendente — FASE 7 |
+| CI/CD, logs, backup operacional | Pronto — FASE 7 |
 
 ---
 
@@ -379,7 +379,7 @@ Módulos atuais:
 | `health` | `GET /health` | Continua |
 | `database` | `PrismaService` global | Continua |
 | `common` | Validação de env | DTOs, filtros, paginação |
-| `auth` | Registro, login, JWT, refresh | 2FA na FASE 7 |
+| `auth` | Registro, login, JWT, refresh | 2FA (endurecimento futuro) |
 | `users` | Perfil, senha, exclusão de conta | Continua |
 | `health-units` | CRUD, busca, envio para aprovação | Continua |
 | `specialties` | Lista e cadastro | Edição/remoção no admin |
@@ -435,6 +435,8 @@ web-saude-api/
 
 O que **nunca** deve ir para logs: senha, JWT, refresh token, código de e-mail, token de recuperação, connection string.
 
+Cada request autenticado ou público gera uma linha `METHOD /path status duração`. Corpos e headers sensíveis não são logados. Erros 500 vão para o logger sem stack na resposta HTTP.
+
 ---
 
 ## Scripts npm
@@ -446,12 +448,14 @@ O que **nunca** deve ir para logs: senha, JWT, refresh token, código de e-mail,
 | `npm run start:prod` | Sobe a build (`dist/`) |
 | `npm run build` | Compila TypeScript |
 | `npm run lint` | ESLint (com `--fix`) |
+| `npm run lint:ci` | ESLint sem alterar arquivos (usado no GitHub Actions) |
 | `npm run format` | Prettier |
 | `npm test` | Testes unitários |
 | `npm run test:watch` | Unitários em watch |
 | `npm run test:cov` | Coverage |
 | `npm run test:e2e` | Testes E2E |
 | `npm run prisma:generate` | Gera o Prisma Client |
+| `npm run backup` | Dump lógico via `pg_dump` (`scripts/backup.ps1`) |
 
 ---
 
@@ -462,14 +466,34 @@ npm test
 npm run test:e2e
 ```
 
-Na FASE 6 já há:
+Na FASE 7 já há:
 
-- unitário do `GET /health`, da paginação, da média e do fluxo de envio
-- E2E de auth, unidades, paciente, gestor e admin (aprovar, rejeitar, desativar usuário, auditoria)
+- unitários extras (tokens, redação de logs, fluxo do gestor)
+- E2E de auth, unidades, paciente, gestor e admin
+- GitHub Actions (lint, migrate, unit, e2e, build) em todo push/PR para `main`
+- log HTTP (método, rota, status, duração) sem senha/JWT
+- dump operacional em `backups/` (`npm run backup`)
 
-Ainda virão: CI/CD, logs operacionais e 2FA.
+2FA e notificações in-app ficam como endurecimento futuro.
 
 Variáveis mínimas para os testes estão em `test/setup-env.ts`.
+
+---
+
+## CI/CD
+
+Workflow: `.github/workflows/ci.yml`.
+
+Em cada push e pull request para `main`:
+
+1. Sobe PostgreSQL 16
+2. `npm ci`
+3. `npm run lint:ci`
+4. `npx prisma migrate deploy`
+5. `npm test` e `npm run test:e2e`
+6. `npm run build`
+
+Deploy na Render continua por `autoDeploy` no `render.yaml`. A imagem Docker aplica `prisma migrate deploy` na subida.
 
 ---
 
@@ -502,6 +526,14 @@ O `Dockerfile` usa Node 22 Alpine, instala dependências, gera o Prisma Client e
 ## Backup e restauração
 
 Backup que nunca foi restaurado em teste **não** conta como backup.
+
+Na máquina de desenvolvimento (requer `pg_dump` no PATH):
+
+```bash
+npm run backup
+```
+
+O arquivo vai para `backups/websaude-AAAAMMDD-HHMMSS.dump` (gitignored).
 
 ### Supabase
 
@@ -552,6 +584,7 @@ Já coberto pelo `.gitignore`:
 - `.env` e variantes locais
 - logs, cache, temporários
 - `uploads/` (imagens enviadas)
+- `backups/*.dump`
 
 Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.example`, Prisma schema/migrations, Dockerfiles.
 
@@ -565,7 +598,7 @@ Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.ex
 4. **FASE 4 — Paciente** (feita): perfil, favoritos, avaliações, alteração de senha, exclusão de conta.
 5. **FASE 5 — Gestor** (feita): minhas unidades, rascunho, envio para aprovação, edição, motivo de rejeição.
 6. **FASE 6 — Admin** (feita): dashboard, pendências, aprovar/rejeitar, ativar/desativar usuários, especialidades, auditoria.
-7. **FASE 7 — Qualidade:** testes amplos, logs, backup operacional, CI/CD.
+7. **FASE 7 — Qualidade** (feita): testes amplos, logs HTTP, backup operacional, CI/CD.
 
 Cada fase só avança com autorização explícita.
 

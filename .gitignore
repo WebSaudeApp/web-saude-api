@@ -29,6 +29,10 @@ lerna-debug.log*
 # uploaded files
 uploads/
 
+# database dumps
+backups/*
+!backups/.gitkeep
+
 # caches
 .eslintcache
 .cache/
