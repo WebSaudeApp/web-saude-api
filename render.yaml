@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: SWAGGER_ENABLED
-        value: 'false'
+        value: 'true'
       - key: THROTTLE_TTL_MS
         value: '60000'
       - key: THROTTLE_LIMIT
