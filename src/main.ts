@@ -13,7 +13,6 @@ async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
 
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-  const swaggerEnabled = configService.get<boolean>('SWAGGER_ENABLED', false);
   const port = configService.get<number>('PORT', 3000);
   const corsOrigins = configService
     .get<string>('CORS_ORIGINS', '')
@@ -27,7 +26,7 @@ async function bootstrap(): Promise<void> {
 
   app.use(
     helmet({
-      contentSecurityPolicy: swaggerEnabled ? false : undefined,
+      contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
@@ -49,25 +48,21 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  if (swaggerEnabled) {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('Web Saúde API')
-      .setDescription(
-        'API da plataforma Web Saúde para busca e consulta de unidades de saúde.',
-      )
-      .setVersion('0.1.0')
-      .addBearerAuth()
-      .build();
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Web Saúde API')
+    .setDescription(
+      'API da plataforma Web Saúde para busca e consulta de unidades de saúde.',
+    )
+    .setVersion('0.1.0')
+    .addBearerAuth()
+    .build();
 
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document);
-  }
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document);
 
   await app.listen(port, '0.0.0.0');
   logger.log(`API disponível na porta ${port}`);
-  if (swaggerEnabled) {
-    logger.log(`Swagger disponível em http://localhost:${port}/docs`);
-  }
+  logger.log(`Swagger disponível em http://localhost:${port}/docs`);
 }
 
 void bootstrap();
