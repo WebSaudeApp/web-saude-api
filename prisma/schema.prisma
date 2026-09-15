@@ -192,6 +192,7 @@ model UnitImage {
   unitId    String
   url       String
   isMain    Boolean  @default(false)
+  bytes     Bytes?
   createdAt DateTime @default(now())
 
   unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)

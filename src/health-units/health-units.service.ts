@@ -12,8 +12,7 @@ import {
   Prisma,
   UserRole,
 } from '@prisma/client';
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { paginated } from '../common/dto/pagination-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import { SpecialtiesService } from '../specialties/specialties.service';
@@ -32,20 +31,24 @@ import {
 } from './unit-workflow.util';
 import {
   ALLOWED_IMAGE_MIMES,
-  ensureUploadsDir,
   isAllowedImage,
   MAX_IMAGE_SIZE_BYTES,
   MAX_UNIT_IMAGES,
   publicImageUrl,
   removeUploadedFile,
-  uniqueImageName,
-  uploadsRoot,
 } from './images/unit-image.util';
+
+const imageSelect = {
+  id: true,
+  url: true,
+  isMain: true,
+  createdAt: true,
+} as const;
 
 const unitInclude = {
   specialties: { include: { specialty: true } },
   openingHours: { orderBy: { dayOfWeek: 'asc' as const } },
-  images: { orderBy: { createdAt: 'asc' as const } },
+  images: { orderBy: { createdAt: 'asc' as const }, select: imageSelect },
 };
 
 @Injectable()
@@ -348,18 +351,17 @@ export class HealthUnitsService {
       throw new BadRequestException('Use JPG, PNG ou WEBP.');
     }
     if (unit.images.length >= MAX_UNIT_IMAGES) {
-      throw new BadRequestException('Limite de 10 imagens por unidade.');
+      throw new BadRequestException('Limite de 50 imagens por unidade.');
     }
 
-    await ensureUploadsDir();
-    const filename = uniqueImageName(file.mimetype);
-    await writeFile(join(uploadsRoot(), filename), file.buffer);
-    const isMain = unit.images.length === 0;
+    const imageId = randomUUID();
     await this.prisma.unitImage.create({
       data: {
+        id: imageId,
         unitId: id,
-        url: publicImageUrl(filename),
-        isMain,
+        url: publicImageUrl(imageId),
+        isMain: unit.images.length === 0,
+        bytes: new Uint8Array(file.buffer),
       },
     });
     return this.findOne(id, user);

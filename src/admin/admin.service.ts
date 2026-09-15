@@ -27,7 +27,10 @@ const pendingInclude = {
   owner: { select: { id: true, name: true, email: true } },
   specialties: { include: { specialty: true } },
   openingHours: { orderBy: { dayOfWeek: 'asc' as const } },
-  images: { orderBy: { createdAt: 'asc' as const } },
+  images: {
+    orderBy: { createdAt: 'asc' as const },
+    select: { id: true, url: true, isMain: true, createdAt: true },
+  },
 } as const;
 
 @Injectable()

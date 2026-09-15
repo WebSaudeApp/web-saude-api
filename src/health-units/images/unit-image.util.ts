@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { mkdir, unlink } from 'fs/promises';
 import { extname, join } from 'path';
 
-export const MAX_UNIT_IMAGES = 10;
+export const MAX_UNIT_IMAGES = 50;
 export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -40,11 +40,14 @@ export async function ensureUploadsDir(): Promise<void> {
   await mkdir(uploadsRoot(), { recursive: true });
 }
 
-export function publicImageUrl(filename: string): string {
-  return `/uploads/health-units/${filename}`;
+export function publicImageUrl(imageId: string): string {
+  return `/unit-images/${imageId}`;
 }
 
 export async function removeUploadedFile(url: string): Promise<void> {
+  if (!url.startsWith('/uploads/')) {
+    return;
+  }
   const filename = url.split('/').pop();
   if (!filename) {
     return;
