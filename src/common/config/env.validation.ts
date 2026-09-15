@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { plainToInstance, Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -9,6 +10,14 @@ import {
   Min,
   validateSync,
 } from 'class-validator';
+
+function jwtSecret(value: unknown): string {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value;
+  }
+
+  return randomBytes(48).toString('base64url');
+}
 
 enum NodeEnv {
   Development = 'development',
@@ -54,18 +63,26 @@ export class EnvironmentVariables {
   @IsBoolean()
   SWAGGER_ENABLED!: boolean;
 
+  @Transform(({ value }: { value: unknown }) => jwtSecret(value))
   @IsString()
   @IsNotEmpty()
   JWT_ACCESS_SECRET!: string;
 
+  @Transform(({ value }: { value: unknown }) => jwtSecret(value))
   @IsString()
   @IsNotEmpty()
   JWT_REFRESH_SECRET!: string;
 
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.length > 0 ? value : '15m',
+  )
   @IsString()
   @IsNotEmpty()
   JWT_ACCESS_EXPIRES!: string;
 
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.length > 0 ? value : '7d',
+  )
   @IsString()
   @IsNotEmpty()
   JWT_REFRESH_EXPIRES!: string;
@@ -74,6 +91,19 @@ export class EnvironmentVariables {
 export function validate(
   config: Record<string, unknown>,
 ): EnvironmentVariables {
+  const hasAccessSecret =
+    typeof config.JWT_ACCESS_SECRET === 'string' &&
+    config.JWT_ACCESS_SECRET.trim().length > 0;
+  const hasRefreshSecret =
+    typeof config.JWT_REFRESH_SECRET === 'string' &&
+    config.JWT_REFRESH_SECRET.trim().length > 0;
+
+  if (!hasAccessSecret || !hasRefreshSecret) {
+    console.warn(
+      'JWT_ACCESS_SECRET ou JWT_REFRESH_SECRET ausente; gerando segredos temporários.',
+    );
+  }
+
   const validated = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: false,
   });
@@ -85,6 +115,11 @@ export function validate(
   if (errors.length > 0) {
     throw new Error(errors.toString());
   }
+
+  process.env.JWT_ACCESS_SECRET = validated.JWT_ACCESS_SECRET;
+  process.env.JWT_REFRESH_SECRET = validated.JWT_REFRESH_SECRET;
+  process.env.JWT_ACCESS_EXPIRES = validated.JWT_ACCESS_EXPIRES;
+  process.env.JWT_REFRESH_EXPIRES = validated.JWT_REFRESH_EXPIRES;
 
   return validated;
 }

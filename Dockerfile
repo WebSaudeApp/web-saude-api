@@ -12,4 +12,4 @@ RUN npx prisma generate && npm run build
 
 ENV NODE_ENV=production
 EXPOSE 10000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && if [ -f dist/main.js ]; then exec node dist/main.js; elif [ -f dist/src/main.js ]; then exec node dist/src/main.js; else echo 'main.js não encontrado' && find dist -name 'main.js' && exit 1; fi"]

@@ -58,7 +58,10 @@ async function bootstrap(): Promise<void> {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document, {
+    customSiteTitle: 'Web Saúde API',
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   await app.listen(port, '0.0.0.0');
   logger.log(`API disponível na porta ${port}`);
