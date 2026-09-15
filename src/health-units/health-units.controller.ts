@@ -32,11 +32,19 @@ import { SetSpecialtiesDto } from './dto/set-specialties.dto';
 import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
 import { HealthUnitsService } from './health-units.service';
 import { MAX_IMAGE_SIZE_BYTES } from './images/unit-image.util';
+import { FavoritesService } from '../favorites/favorites.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { CreateReviewDto } from '../reviews/dto/create-review.dto';
+import { ReviewsService } from '../reviews/reviews.service';
 
 @ApiTags('health-units')
 @Controller('health-units')
 export class HealthUnitsController {
-  constructor(private readonly healthUnitsService: HealthUnitsService) {}
+  constructor(
+    private readonly healthUnitsService: HealthUnitsService,
+    private readonly reviewsService: ReviewsService,
+    private readonly favoritesService: FavoritesService,
+  ) {}
 
   @Get()
   @Public()
@@ -118,6 +126,44 @@ export class HealthUnitsController {
     @Body() dto: SetOpeningHoursDto,
   ) {
     return this.healthUnitsService.setOpeningHours(user, id, dto);
+  }
+
+  @Get(':id/reviews')
+  @Public()
+  @ApiOperation({ summary: 'Lista as avaliações públicas da unidade' })
+  listReviews(@Param('id') id: string, @Query() query: PaginationQueryDto) {
+    return this.reviewsService.listByUnit(id, query);
+  }
+
+  @Post(':id/reviews')
+  @ApiBearerAuth()
+  @Roles(UserRole.PATIENT)
+  @ApiOperation({ summary: 'Avalia uma unidade publicada' })
+  createReview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: CreateReviewDto,
+  ) {
+    return this.reviewsService.create(user, id, dto);
+  }
+
+  @Post(':id/favorite')
+  @ApiBearerAuth()
+  @Roles(UserRole.PATIENT)
+  @ApiOperation({ summary: 'Adiciona a unidade aos favoritos' })
+  addFavorite(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.favoritesService.add(user, id);
+  }
+
+  @Delete(':id/favorite')
+  @ApiBearerAuth()
+  @Roles(UserRole.PATIENT)
+  @ApiOperation({ summary: 'Remove a unidade dos favoritos' })
+  removeFavorite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.favoritesService.remove(user, id);
   }
 
   @Post(':id/images')

@@ -32,6 +32,8 @@ model User {
   emailVerifications   EmailVerification[]
   passwordResets       PasswordReset[]
   healthUnits          HealthUnit[]
+  reviews              Review[]
+  favorites            Favorite[]
 
   @@map("users")
 }
@@ -138,6 +140,8 @@ model HealthUnit {
   specialties  UnitSpecialty[]
   openingHours OpeningHour[]
   images       UnitImage[]
+  reviews      Review[]
+  favorites    Favorite[]
 
   @@index([ownerId])
   @@index([city, state])
@@ -193,4 +197,34 @@ model UnitImage {
 
   @@index([unitId])
   @@map("unit_images")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  unitId    String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, unitId])
+  @@index([unitId])
+  @@map("reviews")
+}
+
+model Favorite {
+  userId    String
+  unitId    String
+  createdAt DateTime @default(now())
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@id([userId, unitId])
+  @@index([unitId])
+  @@map("favorites")
 }

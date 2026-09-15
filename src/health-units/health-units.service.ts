@@ -152,13 +152,21 @@ export class HealthUnitsService {
 
   async findOne(id: string, user?: AuthenticatedUser) {
     const unit = await this.findExisting(id);
-    if (this.isPublished(unit)) {
-      return this.toResponse(unit);
+    if (
+      !this.isPublished(unit) &&
+      !(user && (user.id === unit.ownerId || user.role === UserRole.ADMIN))
+    ) {
+      throw new NotFoundException('Unidade não encontrada.');
     }
-    if (user && (user.id === unit.ownerId || user.role === UserRole.ADMIN)) {
-      return this.toResponse(unit);
+
+    let isFavorite = false;
+    if (user) {
+      const favorite = await this.prisma.favorite.findUnique({
+        where: { userId_unitId: { userId: user.id, unitId: id } },
+      });
+      isFavorite = Boolean(favorite);
     }
-    throw new NotFoundException('Unidade não encontrada.');
+    return this.toResponse(unit, isFavorite);
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateHealthUnitDto) {
@@ -395,6 +403,7 @@ export class HealthUnitsService {
 
   private toResponse(
     unit: Prisma.HealthUnitGetPayload<{ include: typeof unitInclude }>,
+    isFavorite = false,
   ) {
     return {
       id: unit.id,
@@ -423,6 +432,7 @@ export class HealthUnitsService {
       specialties: unit.specialties.map((item) => item.specialty),
       openingHours: unit.openingHours,
       images: unit.images,
+      isFavorite,
     };
   }
 }

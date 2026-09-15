@@ -10,8 +10,8 @@ web-saude/
 └── web-saude-ui/
 ```
 
-**Versão atual:** `0.0.1` — **FASE 3 (unidades)** concluída.  
-Fases 1–3 prontas. Favoritos, avaliações, fluxo de aprovação do gestor e painel admin ainda **não** estão implementados.
+**Versão atual:** `0.0.1` — **FASE 4 (paciente)** concluída.  
+Fases 1–4 prontas. Fluxo de aprovação do gestor e painel admin ainda **não** estão implementados.
 
 ---
 
@@ -73,7 +73,7 @@ Visitantes podem pesquisar sem conta.
 | Módulos de domínio (esqueleto) | Pronto |
 | Login, JWT, refresh token | Pronto — FASE 2 |
 | Unidades, especialidades, horários, imagens | Pronto — FASE 3 |
-| Favoritos e avaliações | Pendente — FASE 4 |
+| Favoritos e avaliações | Pronto — FASE 4 |
 | Fluxo do gestor | Pendente — FASE 5 |
 | Painel admin | Pendente — FASE 6 |
 | CI/CD, logs avançados, 2FA | Pendente — FASE 7 |
@@ -209,7 +209,7 @@ Arquivo: `prisma/schema.prisma`
 - `DATABASE_URL` — queries da aplicação (pooler)
 - `DIRECT_URL` — migrations
 
-Modelos atuais: `User`, `Session`, `EmailVerification`, `PasswordReset`, `HealthUnit`, `Specialty`, `UnitSpecialty`, `OpeningHour`, `UnitImage`.
+Modelos atuais: `User`, `Session`, `EmailVerification`, `PasswordReset`, `HealthUnit`, `Specialty`, `UnitSpecialty`, `OpeningHour`, `UnitImage`, `Review`, `Favorite`.
 
 Comandos:
 
@@ -280,6 +280,24 @@ A API escuta em `http://localhost:${PORT}`.
 
 Cadastro público só `PATIENT` ou `FUNCTIONAL`. Access token ~15 min; refresh 7 dias, revogável.
 
+### Perfil, favoritos e avaliações (FASE 4)
+
+| Método | Rota | Auth |
+| --- | --- | --- |
+| `PATCH` | `/users/me` | JWT (nome e telefone) |
+| `PATCH` | `/users/me/password` | JWT |
+| `DELETE` | `/users/me` | JWT (confirma com senha; anonimiza dados) |
+| `GET` | `/users/me/favorites` | JWT `PATIENT` |
+| `GET` | `/users/me/reviews` | JWT `PATIENT` |
+| `POST` | `/health-units/:id/favorite` | JWT `PATIENT` |
+| `DELETE` | `/health-units/:id/favorite` | JWT `PATIENT` |
+| `GET` | `/health-units/:id/reviews` | pública (unidade publicada) |
+| `POST` | `/health-units/:id/reviews` | JWT `PATIENT` (uma por unidade) |
+| `PATCH` | `/reviews/:id` | JWT dono da avaliação |
+| `DELETE` | `/reviews/:id` | JWT dono da avaliação |
+
+Favorito duplicado e avaliação duplicada retornam **409**. Gestor não avalia a própria unidade. A média `averageRating` é recalculada a cada avaliação. Encerrar a conta revoga sessões, remove favoritos, anonimiza nome/e-mail/telefone e faz soft delete das unidades do gestor.
+
 ### Unidades e especialidades (FASE 3)
 
 | Método | Rota | Auth |
@@ -308,8 +326,6 @@ Aprovação de unidades é da **FASE 6**. Enquanto isso, testes e o Prisma Studi
 
 | Método | Rota | Fase |
 | --- | --- | --- |
-| `POST` | `/health-units/:id/favorite` | 4 |
-| `GET` | `/users/me/favorites` | 4 |
 | `PATCH` | `/admin/health-units/:id/approve` | 6 |
 | `PATCH` | `/admin/health-units/:id/reject` | 6 |
 
@@ -343,11 +359,11 @@ Módulos atuais:
 | `database` | `PrismaService` global | Continua |
 | `common` | Validação de env | DTOs, filtros, paginação |
 | `auth` | Registro, login, JWT, refresh | 2FA na FASE 7 |
-| `users` | `GET /users/me` | Perfil, papéis, LGPD |
+| `users` | Perfil, senha, exclusão de conta | Papéis no admin |
 | `health-units` | CRUD, busca, imagens, horários | Envio para aprovação (FASE 5) |
 | `specialties` | Lista e cadastro | Gestão avançada no admin |
-| `reviews` | Esqueleto | Avaliações |
-| `favorites` | Esqueleto | Favoritos |
+| `reviews` | Avaliações e média da unidade | Moderação no admin |
+| `favorites` | Favoritos do paciente | Continua |
 | `admin` | Esqueleto | Aprovação, dashboard, usuários |
 | `notifications` | Esqueleto | Avisos in-app |
 | `audit` | Esqueleto | Logs de auditoria |
@@ -425,13 +441,14 @@ npm test
 npm run test:e2e
 ```
 
-Na FASE 3 já há:
+Na FASE 4 já há:
 
-- unitário do `GET /health` e da paginação
+- unitário do `GET /health`, da paginação e da média de avaliações
 - E2E de auth (registro, login, token)
 - E2E de unidades (paciente 403, dono edita, outro gestor 403, rascunho oculto, busca paginada)
+- E2E do paciente (perfil, favorito duplicado, avaliação duplicada, senha, exclusão de conta)
 
-Ainda virão: aprovação/rejeição, avaliação duplicada, favorito duplicado, exclusão de conta.
+Ainda virão: aprovação/rejeição e fluxo completo do gestor.
 
 Variáveis mínimas para os testes estão em `test/setup-env.ts`.
 
@@ -526,7 +543,7 @@ Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.ex
 1. **FASE 1 — Base** (feita): NestJS, Prisma, Docker, Helmet, CORS, rate limit, Swagger, health.
 2. **FASE 2 — Autenticação** (feita): User, register, login, JWT, refresh, logout, verificação de e-mail, recuperação de senha, guards.
 3. **FASE 3 — Unidades** (feita): HealthUnit, especialidades, horários, imagens, busca, filtros, paginação.
-4. **FASE 4 — Paciente:** perfil, favoritos, avaliações, alteração de senha, exclusão de conta.
+4. **FASE 4 — Paciente** (feita): perfil, favoritos, avaliações, alteração de senha, exclusão de conta.
 5. **FASE 5 — Gestor:** minhas unidades, rascunho, envio para aprovação, edição, motivo de rejeição.
 6. **FASE 6 — Admin:** dashboard, pendências, aprovar/rejeitar, ativar/desativar usuários, especialidades, auditoria.
 7. **FASE 7 — Qualidade:** testes amplos, logs, backup operacional, CI/CD.
