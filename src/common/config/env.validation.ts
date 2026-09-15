@@ -53,6 +53,22 @@ export class EnvironmentVariables {
   )
   @IsBoolean()
   SWAGGER_ENABLED!: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_ACCESS_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_ACCESS_EXPIRES!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_EXPIRES!: string;
 }
 
 export function validate(

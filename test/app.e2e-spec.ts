@@ -36,4 +36,10 @@ describe('Health (e2e)', () => {
       database: 'connected',
     });
   });
+
+  it('GET / retorna api online', () => {
+    return request(app.getHttpServer()).get('/').expect(200).expect({
+      message: 'api online',
+    });
+  });
 });

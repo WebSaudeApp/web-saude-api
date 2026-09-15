@@ -25,4 +25,13 @@ describe('HealthController', () => {
       ServiceUnavailableException,
     );
   });
+
+  it('retorna api online na raiz', () => {
+    const prisma = {
+      isDatabaseConnected: jest.fn(),
+    };
+    const controller = new HealthController(prisma as unknown as PrismaService);
+
+    expect(controller.root()).toEqual({ message: 'api online' });
+  });
 });

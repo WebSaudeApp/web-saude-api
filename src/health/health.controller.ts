@@ -1,13 +1,23 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../database/prisma.service';
-import { HealthResponseDto } from './dto/health-response.dto';
+import { HealthResponseDto, RootResponseDto } from './dto/health-response.dto';
 
 @ApiTags('health')
+@Public()
 @Controller()
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
+
+  @Get()
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Indica que a API está no ar' })
+  @ApiOkResponse({ type: RootResponseDto })
+  root(): RootResponseDto {
+    return { message: 'api online' };
+  }
 
   @Get('health')
   @SkipThrottle()
