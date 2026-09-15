@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: web-saude-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SWAGGER_ENABLED
+        value: 'false'
+      - key: THROTTLE_TTL_MS
+        value: '60000'
+      - key: THROTTLE_LIMIT
+        value: '100'
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,http://localhost:3000,http://localhost:4200
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false

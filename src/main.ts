@@ -56,8 +56,8 @@ async function bootstrap(): Promise<void> {
     SwaggerModule.setup('docs', app, document);
   }
 
-  await app.listen(port);
-  logger.log(`API disponível em http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`API disponível na porta ${port}`);
   if (swaggerEnabled) {
     logger.log(`Swagger disponível em http://localhost:${port}/docs`);
   }
