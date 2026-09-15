@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+
+# compiled / generated
+dist/
+build/
+generated/
+*.tsbuildinfo
+
+# env — secrets only here, never commit
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# tests
+coverage/
+.nyc_output/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# caches
+.eslintcache
+.cache/
+.tmp/
+tmp/
+tmp-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json

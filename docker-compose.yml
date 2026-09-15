@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: web-saude-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: websaude
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d websaude']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Reservado para cache/filas (BullMQ) em fase futura — não iniciar no MVP.
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: web-saude-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - '6379:6379'
+
+volumes:
+  postgres_data:
