@@ -98,10 +98,29 @@ export function validate(
     typeof config.JWT_REFRESH_SECRET === 'string' &&
     config.JWT_REFRESH_SECRET.trim().length > 0;
 
+  if (!hasAccessSecret) {
+    config.JWT_ACCESS_SECRET = jwtSecret(undefined);
+  }
+  if (!hasRefreshSecret) {
+    config.JWT_REFRESH_SECRET = jwtSecret(undefined);
+  }
   if (!hasAccessSecret || !hasRefreshSecret) {
     console.warn(
       'JWT_ACCESS_SECRET ou JWT_REFRESH_SECRET ausente; gerando segredos temporários.',
     );
+  }
+
+  if (
+    typeof config.JWT_ACCESS_EXPIRES !== 'string' ||
+    config.JWT_ACCESS_EXPIRES.trim().length === 0
+  ) {
+    config.JWT_ACCESS_EXPIRES = '15m';
+  }
+  if (
+    typeof config.JWT_REFRESH_EXPIRES !== 'string' ||
+    config.JWT_REFRESH_EXPIRES.trim().length === 0
+  ) {
+    config.JWT_REFRESH_EXPIRES = '7d';
   }
 
   const validated = plainToInstance(EnvironmentVariables, config, {
