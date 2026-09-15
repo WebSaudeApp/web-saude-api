@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
@@ -37,7 +31,10 @@ export class UnitImagesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Serve o arquivo da imagem gravado no banco' })
-  async file(@Param('id') id: string, @Res() response: Response): Promise<void> {
+  async file(
+    @Param('id') id: string,
+    @Res() response: Response,
+  ): Promise<void> {
     const image = await this.prisma.unitImage.findUnique({
       where: { id },
       select: { bytes: true },
