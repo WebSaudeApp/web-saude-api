@@ -10,8 +10,8 @@ web-saude/
 └── web-saude-ui/
 ```
 
-**Versão atual:** `0.0.1` — **FASE 4 (paciente)** concluída.  
-Fases 1–4 prontas. Fluxo de aprovação do gestor e painel admin ainda **não** estão implementados.
+**Versão atual:** `0.0.1` — **FASE 5 (gestor)** concluída.  
+Fases 1–5 prontas. Painel admin (aprovar/rejeitar) ainda **não** está implementado.
 
 ---
 
@@ -74,7 +74,7 @@ Visitantes podem pesquisar sem conta.
 | Login, JWT, refresh token | Pronto — FASE 2 |
 | Unidades, especialidades, horários, imagens | Pronto — FASE 3 |
 | Favoritos e avaliações | Pronto — FASE 4 |
-| Fluxo do gestor | Pendente — FASE 5 |
+| Fluxo do gestor | Pronto — FASE 5 |
 | Painel admin | Pendente — FASE 6 |
 | CI/CD, logs avançados, 2FA | Pendente — FASE 7 |
 
@@ -320,7 +320,18 @@ Busca pública (`GET /health-units`) aceita `search`, `type`, `city`, `state`, `
 
 Imagens ficam em `uploads/health-units/` e são servidas em `/uploads/health-units/...`.
 
-Aprovação de unidades é da **FASE 6**. Enquanto isso, testes e o Prisma Studio podem marcar uma unidade como `APPROVED` + `ACTIVE` para ela aparecer na busca pública.
+Aprovação pelo admin é da **FASE 6**. O gestor envia o rascunho (`POST /health-units/:id/submit`) e a unidade fica `PENDING` até um administrador decidir.
+
+### Fluxo do gestor (FASE 5)
+
+| Método | Rota | Auth |
+| --- | --- | --- |
+| `GET` | `/health-units/mine` | JWT `FUNCTIONAL` (filtro opcional `approvalStatus`) |
+| `POST` | `/health-units/:id/submit` | JWT dono — `DRAFT` ou `REJECTED` → `PENDING` |
+| `POST` | `/health-units/:id/withdraw` | JWT dono — `PENDING` → `DRAFT` |
+| `PATCH` | `/health-units/:id/status` | JWT dono — só se `APPROVED` (`ACTIVE` / `INACTIVE`) |
+
+Envio exige ao menos **uma especialidade** e **um horário**. Enquanto estiver `PENDING`, edição de dados, especialidades, horários e imagens retorna **409**. Unidade `REJECTED` devolve `rejectionReason` em `GET /health-units/mine`; ao reenviar, o motivo é limpo.
 
 ### Rotas previstas (ainda não existem)
 
@@ -360,7 +371,7 @@ Módulos atuais:
 | `common` | Validação de env | DTOs, filtros, paginação |
 | `auth` | Registro, login, JWT, refresh | 2FA na FASE 7 |
 | `users` | Perfil, senha, exclusão de conta | Papéis no admin |
-| `health-units` | CRUD, busca, imagens, horários | Envio para aprovação (FASE 5) |
+| `health-units` | CRUD, busca, envio para aprovação | Moderação no admin |
 | `specialties` | Lista e cadastro | Gestão avançada no admin |
 | `reviews` | Avaliações e média da unidade | Moderação no admin |
 | `favorites` | Favoritos do paciente | Continua |
@@ -441,14 +452,12 @@ npm test
 npm run test:e2e
 ```
 
-Na FASE 4 já há:
+Na FASE 5 já há:
 
-- unitário do `GET /health`, da paginação e da média de avaliações
-- E2E de auth (registro, login, token)
-- E2E de unidades (paciente 403, dono edita, outro gestor 403, rascunho oculto, busca paginada)
-- E2E do paciente (perfil, favorito duplicado, avaliação duplicada, senha, exclusão de conta)
+- unitário do `GET /health`, da paginação, da média e do fluxo de envio
+- E2E de auth, unidades, paciente e gestor (envio, 409 em análise, rejeição, republicação)
 
-Ainda virão: aprovação/rejeição e fluxo completo do gestor.
+Ainda virão: aprovação/rejeição pelo admin.
 
 Variáveis mínimas para os testes estão em `test/setup-env.ts`.
 
@@ -544,7 +553,7 @@ Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.ex
 2. **FASE 2 — Autenticação** (feita): User, register, login, JWT, refresh, logout, verificação de e-mail, recuperação de senha, guards.
 3. **FASE 3 — Unidades** (feita): HealthUnit, especialidades, horários, imagens, busca, filtros, paginação.
 4. **FASE 4 — Paciente** (feita): perfil, favoritos, avaliações, alteração de senha, exclusão de conta.
-5. **FASE 5 — Gestor:** minhas unidades, rascunho, envio para aprovação, edição, motivo de rejeição.
+5. **FASE 5 — Gestor** (feita): minhas unidades, rascunho, envio para aprovação, edição, motivo de rejeição.
 6. **FASE 6 — Admin:** dashboard, pendências, aprovar/rejeitar, ativar/desativar usuários, especialidades, auditoria.
 7. **FASE 7 — Qualidade:** testes amplos, logs, backup operacional, CI/CD.
 

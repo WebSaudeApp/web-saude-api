@@ -26,6 +26,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateHealthUnitDto } from './dto/create-health-unit.dto';
+import { MineHealthUnitsQueryDto } from './dto/mine-health-units-query.dto';
+import { SetUnitStatusDto } from './dto/set-unit-status.dto';
 import { SearchHealthUnitsDto } from './dto/search-health-units.dto';
 import { SetOpeningHoursDto } from './dto/set-opening-hours.dto';
 import { SetSpecialtiesDto } from './dto/set-specialties.dto';
@@ -59,8 +61,11 @@ export class HealthUnitsController {
   @ApiBearerAuth()
   @Roles(UserRole.FUNCTIONAL)
   @ApiOperation({ summary: 'Lista as unidades do gestor autenticado' })
-  mine(@CurrentUser() user: AuthenticatedUser) {
-    return this.healthUnitsService.findMine(user);
+  mine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: MineHealthUnitsQueryDto,
+  ) {
+    return this.healthUnitsService.findMine(user, query);
   }
 
   @Get(':id')
@@ -126,6 +131,36 @@ export class HealthUnitsController {
     @Body() dto: SetOpeningHoursDto,
   ) {
     return this.healthUnitsService.setOpeningHours(user, id, dto);
+  }
+
+  @Post(':id/submit')
+  @ApiBearerAuth()
+  @Roles(UserRole.FUNCTIONAL)
+  @ApiOperation({ summary: 'Envia a unidade para aprovação' })
+  submit(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.healthUnitsService.submit(user, id);
+  }
+
+  @Post(':id/withdraw')
+  @ApiBearerAuth()
+  @Roles(UserRole.FUNCTIONAL)
+  @ApiOperation({ summary: 'Cancela o envio e volta a unidade para rascunho' })
+  withdraw(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.healthUnitsService.withdraw(user, id);
+  }
+
+  @Patch(':id/status')
+  @ApiBearerAuth()
+  @Roles(UserRole.FUNCTIONAL)
+  @ApiOperation({
+    summary: 'Ativa ou desativa a publicação de uma unidade já aprovada',
+  })
+  setStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: SetUnitStatusDto,
+  ) {
+    return this.healthUnitsService.setPublicationStatus(user, id, dto);
   }
 
   @Get(':id/reviews')

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -22,6 +23,13 @@ import { SearchHealthUnitsDto } from './dto/search-health-units.dto';
 import { SetOpeningHoursDto } from './dto/set-opening-hours.dto';
 import { SetSpecialtiesDto } from './dto/set-specialties.dto';
 import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
+import { MineHealthUnitsQueryDto } from './dto/mine-health-units-query.dto';
+import { SetUnitStatusDto } from './dto/set-unit-status.dto';
+import {
+  canEditWhileWaiting,
+  canSubmitApproval,
+  canTogglePublication,
+} from './unit-workflow.util';
 import {
   ALLOWED_IMAGE_MIMES,
   ensureUploadsDir,
@@ -140,10 +148,16 @@ export class HealthUnitsService {
     return this.toResponse(unit);
   }
 
-  async findMine(user: AuthenticatedUser) {
+  async findMine(user: AuthenticatedUser, query: MineHealthUnitsQueryDto = {}) {
     this.assertFunctional(user);
     const units = await this.prisma.healthUnit.findMany({
-      where: { ownerId: user.id, deletedAt: null },
+      where: {
+        ownerId: user.id,
+        deletedAt: null,
+        ...(query.approvalStatus
+          ? { approvalStatus: query.approvalStatus }
+          : {}),
+      },
       include: unitInclude,
       orderBy: { updatedAt: 'desc' },
     });
@@ -172,6 +186,7 @@ export class HealthUnitsService {
   async update(user: AuthenticatedUser, id: string, dto: UpdateHealthUnitDto) {
     const unit = await this.findExisting(id);
     this.assertOwner(user, unit.ownerId);
+    this.assertEditable(unit);
     const updated = await this.prisma.healthUnit.update({
       where: { id },
       data: this.toUpdateData(dto),
@@ -190,6 +205,75 @@ export class HealthUnitsService {
     return { message: 'Unidade removida.' };
   }
 
+  async submit(user: AuthenticatedUser, id: string) {
+    const unit = await this.findExisting(id);
+    this.assertOwner(user, unit.ownerId);
+    if (!canSubmitApproval(unit.approvalStatus)) {
+      throw new BadRequestException(
+        unit.approvalStatus === ApprovalStatus.PENDING
+          ? 'Esta unidade já está em análise.'
+          : 'Só rascunhos ou unidades rejeitadas podem ser enviadas.',
+      );
+    }
+    if (unit.specialties.length === 0) {
+      throw new BadRequestException('Cadastre ao menos uma especialidade.');
+    }
+    if (unit.openingHours.length === 0) {
+      throw new BadRequestException(
+        'Cadastre ao menos um horário de funcionamento.',
+      );
+    }
+    const updated = await this.prisma.healthUnit.update({
+      where: { id },
+      data: {
+        approvalStatus: ApprovalStatus.PENDING,
+        status: HealthUnitStatus.INACTIVE,
+        rejectionReason: null,
+      },
+      include: unitInclude,
+    });
+    return this.toResponse(updated);
+  }
+
+  async withdraw(user: AuthenticatedUser, id: string) {
+    const unit = await this.findExisting(id);
+    this.assertOwner(user, unit.ownerId);
+    if (unit.approvalStatus !== ApprovalStatus.PENDING) {
+      throw new BadRequestException(
+        'Só é possível cancelar o envio de uma unidade em análise.',
+      );
+    }
+    const updated = await this.prisma.healthUnit.update({
+      where: { id },
+      data: {
+        approvalStatus: ApprovalStatus.DRAFT,
+        status: HealthUnitStatus.INACTIVE,
+      },
+      include: unitInclude,
+    });
+    return this.toResponse(updated);
+  }
+
+  async setPublicationStatus(
+    user: AuthenticatedUser,
+    id: string,
+    dto: SetUnitStatusDto,
+  ) {
+    const unit = await this.findExisting(id);
+    this.assertOwner(user, unit.ownerId);
+    if (!canTogglePublication(unit.approvalStatus)) {
+      throw new BadRequestException(
+        'Só unidades aprovadas alteram o status de publicação.',
+      );
+    }
+    const updated = await this.prisma.healthUnit.update({
+      where: { id },
+      data: { status: dto.status },
+      include: unitInclude,
+    });
+    return this.toResponse(updated);
+  }
+
   async setSpecialties(
     user: AuthenticatedUser,
     id: string,
@@ -197,6 +281,7 @@ export class HealthUnitsService {
   ) {
     const unit = await this.findExisting(id);
     this.assertOwner(user, unit.ownerId);
+    this.assertEditable(unit);
     await this.specialtiesService.assertIdsExist(dto.specialtyIds);
     await this.prisma.$transaction([
       this.prisma.unitSpecialty.deleteMany({ where: { unitId: id } }),
@@ -216,6 +301,7 @@ export class HealthUnitsService {
   ) {
     const unit = await this.findExisting(id);
     this.assertOwner(user, unit.ownerId);
+    this.assertEditable(unit);
     const days = dto.hours.map((item) => item.dayOfWeek);
     if (new Set(days).size !== days.length) {
       throw new BadRequestException('Não repita o mesmo dia da semana.');
@@ -251,6 +337,7 @@ export class HealthUnitsService {
   ) {
     const unit = await this.findExisting(id);
     this.assertOwner(user, unit.ownerId);
+    this.assertEditable(unit);
     if (!file) {
       throw new BadRequestException('Envie um arquivo de imagem.');
     }
@@ -281,6 +368,7 @@ export class HealthUnitsService {
   async setMainImage(user: AuthenticatedUser, id: string, imageId: string) {
     const unit = await this.findExisting(id);
     this.assertOwner(user, unit.ownerId);
+    this.assertEditable(unit);
     const image = unit.images.find((item) => item.id === imageId);
     if (!image) {
       throw new NotFoundException('Imagem não encontrada.');
@@ -301,6 +389,7 @@ export class HealthUnitsService {
   async removeImage(user: AuthenticatedUser, id: string, imageId: string) {
     const unit = await this.findExisting(id);
     this.assertOwner(user, unit.ownerId);
+    this.assertEditable(unit);
     const image = unit.images.find((item) => item.id === imageId);
     if (!image) {
       throw new NotFoundException('Imagem não encontrada.');
@@ -357,6 +446,14 @@ export class HealthUnitsService {
     if (user.id !== ownerId) {
       throw new ForbiddenException(
         'Você não pode editar a unidade de outro gestor.',
+      );
+    }
+  }
+
+  private assertEditable(unit: HealthUnit): void {
+    if (!canEditWhileWaiting(unit.approvalStatus)) {
+      throw new ConflictException(
+        'Unidade em análise. Cancele o envio para editar.',
       );
     }
   }
