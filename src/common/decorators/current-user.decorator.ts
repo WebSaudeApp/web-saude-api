@@ -3,10 +3,13 @@ import type { Request } from 'express';
 import type { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 
 export const CurrentUser = createParamDecorator(
-  (_data: unknown, context: ExecutionContext): AuthenticatedUser => {
+  (
+    _data: unknown,
+    context: ExecutionContext,
+  ): AuthenticatedUser | undefined => {
     const request = context
       .switchToHttp()
-      .getRequest<Request & { user: AuthenticatedUser }>();
+      .getRequest<Request & { user?: AuthenticatedUser }>();
     return request.user;
   },
 );

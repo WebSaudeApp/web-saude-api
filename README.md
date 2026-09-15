@@ -10,8 +10,8 @@ web-saude/
 └── web-saude-ui/
 ```
 
-**Versão atual:** `0.0.1` — **FASE 1 (base)** concluída.  
-Autenticação, unidades, avaliações e favoritos ainda **não** estão implementados.
+**Versão atual:** `0.0.1` — **FASE 3 (unidades)** concluída.  
+Fases 1–3 prontas. Favoritos, avaliações, fluxo de aprovação do gestor e painel admin ainda **não** estão implementados.
 
 ---
 
@@ -44,7 +44,7 @@ Autenticação, unidades, avaliações e favoritos ainda **não** estão impleme
 
 A plataforma permite que visitantes e usuários autenticados encontrem unidades de saúde, vejam detalhes, avaliem e favoritem estabelecimentos.
 
-Três papéis autenticados (a implementar a partir da FASE 2):
+Três papéis autenticados:
 
 | Papel | Descrição |
 | --- | --- |
@@ -71,8 +71,8 @@ Visitantes podem pesquisar sem conta.
 | Swagger/OpenAPI | Pronto |
 | Health check (`GET /health`) | Pronto |
 | Módulos de domínio (esqueleto) | Pronto |
-| Login, JWT, refresh token | Pendente — FASE 2 |
-| Unidades, especialidades, horários, imagens | Pendente — FASE 3 |
+| Login, JWT, refresh token | Pronto — FASE 2 |
+| Unidades, especialidades, horários, imagens | Pronto — FASE 3 |
 | Favoritos e avaliações | Pendente — FASE 4 |
 | Fluxo do gestor | Pendente — FASE 5 |
 | Painel admin | Pendente — FASE 6 |
@@ -89,7 +89,7 @@ Visitantes podem pesquisar sem conta.
 | PostgreSQL 16 | Banco de dados |
 | Prisma 6 | ORM e migrations |
 | Supabase | PostgreSQL hospedado (padrão atual) |
-| JWT + refresh token | Autenticação (FASE 2) |
+| JWT + refresh token | Autenticação |
 | Swagger | Documentação da API |
 | Helmet | Headers HTTP de segurança |
 | class-validator / class-transformer | Validação de entrada |
@@ -168,6 +168,10 @@ Todas as variáveis abaixo são **obrigatórias**. A API não sobe se alguma est
 | `THROTTLE_TTL_MS` | `60000` | Janela do rate limit, em milissegundos |
 | `THROTTLE_LIMIT` | `100` | Máximo de requisições por IP na janela |
 | `SWAGGER_ENABLED` | `true` | `true` em desenvolvimento; `false` em produção |
+| `JWT_ACCESS_SECRET` | string longa | Segredo do access token |
+| `JWT_REFRESH_SECRET` | string longa (diferente) | Segredo do refresh token |
+| `JWT_ACCESS_EXPIRES` | `15m` | Validade do access token |
+| `JWT_REFRESH_EXPIRES` | `7d` | Validade do refresh token |
 
 ### Senha na connection string
 
@@ -205,7 +209,7 @@ Arquivo: `prisma/schema.prisma`
 - `DATABASE_URL` — queries da aplicação (pooler)
 - `DIRECT_URL` — migrations
 
-Na FASE 1 o schema só declara o datasource. Modelos (`User`, `HealthUnit`, etc.) entram na FASE 2.
+Modelos atuais: `User`, `Session`, `EmailVerification`, `PasswordReset`, `HealthUnit`, `Specialty`, `UnitSpecialty`, `OpeningHour`, `UnitImage`.
 
 Comandos:
 
@@ -238,11 +242,16 @@ A API escuta em `http://localhost:${PORT}`.
 
 ## Endpoints disponíveis
 
-Nesta fase só existe o health check. Os demais módulos estão registrados como esqueleto, sem rotas.
+### Saúde da API
 
-### `GET /health`
+| Método | Rota | Auth |
+| --- | --- | --- |
+| `GET` | `/` | pública |
+| `GET` | `/health` | pública (fora do rate limit) |
 
-Verifica se a API está no ar e se o PostgreSQL responde.
+`GET /` devolve `{ "message": "api online" }`.
+
+`GET /health` verifica a API e o PostgreSQL.
 
 **200**
 
@@ -255,22 +264,52 @@ Verifica se a API está no ar e se o PostgreSQL responde.
 
 **503** — banco indisponível.
 
-Este endpoint **não** entra no rate limit (sondas de orquestração).
+### Autenticação (FASE 2)
+
+| Método | Rota | Auth |
+| --- | --- | --- |
+| `POST` | `/auth/register` | pública |
+| `POST` | `/auth/login` | pública |
+| `POST` | `/auth/refresh` | pública |
+| `POST` | `/auth/logout` | JWT |
+| `POST` | `/auth/verify-email` | pública |
+| `POST` | `/auth/resend-verification` | pública |
+| `POST` | `/auth/forgot-password` | pública |
+| `POST` | `/auth/reset-password` | pública |
+| `GET` | `/users/me` | JWT |
+
+Cadastro público só `PATIENT` ou `FUNCTIONAL`. Access token ~15 min; refresh 7 dias, revogável.
+
+### Unidades e especialidades (FASE 3)
+
+| Método | Rota | Auth |
+| --- | --- | --- |
+| `GET` | `/health-units` | pública (só `APPROVED` + `ACTIVE`) |
+| `GET` | `/health-units/mine` | JWT `FUNCTIONAL` |
+| `GET` | `/health-units/:id` | pública se publicada; dono/admin vê rascunho |
+| `POST` | `/health-units` | JWT `FUNCTIONAL` (cria `DRAFT` / `INACTIVE`) |
+| `PATCH` | `/health-units/:id` | JWT dono |
+| `DELETE` | `/health-units/:id` | JWT dono (soft delete) |
+| `PUT` | `/health-units/:id/specialties` | JWT dono |
+| `PUT` | `/health-units/:id/opening-hours` | JWT dono |
+| `POST` | `/health-units/:id/images` | JWT dono (multipart, JPG/PNG/WEBP, máx. 5MB, 10 por unidade) |
+| `PATCH` | `/health-units/:id/images/:imageId/main` | JWT dono |
+| `DELETE` | `/health-units/:id/images/:imageId` | JWT dono |
+| `GET` | `/specialties` | pública |
+| `POST` | `/specialties` | JWT `FUNCTIONAL` ou `ADMIN` |
+
+Busca pública (`GET /health-units`) aceita `search`, `type`, `city`, `state`, `specialty`, `rating`, `sort` (`name` \| `createdAt` \| `rating`) e paginação `page` / `limit` (máx. 100). Resposta: `{ data, meta }`.
+
+Imagens ficam em `uploads/health-units/` e são servidas em `/uploads/health-units/...`.
+
+Aprovação de unidades é da **FASE 6**. Enquanto isso, testes e o Prisma Studio podem marcar uma unidade como `APPROVED` + `ACTIVE` para ela aparecer na busca pública.
 
 ### Rotas previstas (ainda não existem)
 
 | Método | Rota | Fase |
 | --- | --- | --- |
-| `POST` | `/auth/register` | 2 |
-| `POST` | `/auth/login` | 2 |
-| `POST` | `/auth/refresh` | 2 |
-| `POST` | `/auth/logout` | 2 |
-| `POST` | `/auth/verify-email` | 2 |
-| `POST` | `/auth/forgot-password` | 2 |
-| `GET` | `/health-units` | 3 |
 | `POST` | `/health-units/:id/favorite` | 4 |
 | `GET` | `/users/me/favorites` | 4 |
-| `GET` | `/admin/dashboard` | 6 |
 | `PATCH` | `/admin/health-units/:id/approve` | 6 |
 | `PATCH` | `/admin/health-units/:id/reject` | 6 |
 
@@ -303,10 +342,10 @@ Módulos atuais:
 | `health` | `GET /health` | Continua |
 | `database` | `PrismaService` global | Continua |
 | `common` | Validação de env | DTOs, filtros, paginação |
-| `auth` | Esqueleto | Registro, login, JWT, refresh, 2FA |
-| `users` | Esqueleto | Perfil, papéis, LGPD |
-| `health-units` | Esqueleto | CRUD, busca, imagens, horários |
-| `specialties` | Esqueleto | Especialidades |
+| `auth` | Registro, login, JWT, refresh | 2FA na FASE 7 |
+| `users` | `GET /users/me` | Perfil, papéis, LGPD |
+| `health-units` | CRUD, busca, imagens, horários | Envio para aprovação (FASE 5) |
+| `specialties` | Lista e cadastro | Gestão avançada no admin |
 | `reviews` | Esqueleto | Avaliações |
 | `favorites` | Esqueleto | Favoritos |
 | `admin` | Esqueleto | Aprovação, dashboard, usuários |
@@ -386,12 +425,13 @@ npm test
 npm run test:e2e
 ```
 
-Na FASE 1:
+Na FASE 3 já há:
 
-- unitário do `GET /health` (banco ok / banco fora)
-- E2E do `GET /health`
+- unitário do `GET /health` e da paginação
+- E2E de auth (registro, login, token)
+- E2E de unidades (paciente 403, dono edita, outro gestor 403, rascunho oculto, busca paginada)
 
-A partir da FASE 2, testes obrigatórios incluem registro, login, senha incorreta, acesso sem token, paciente em rota admin, gestor editando unidade própria e de outro gestor, aprovação/rejeição, avaliação duplicada, favorito duplicado, paginação, recuperação de senha e verificação de e-mail.
+Ainda virão: aprovação/rejeição, avaliação duplicada, favorito duplicado, exclusão de conta.
 
 Variáveis mínimas para os testes estão em `test/setup-env.ts`.
 
@@ -475,6 +515,7 @@ Já coberto pelo `.gitignore`:
 - `dist/`, `build/`, `coverage/`
 - `.env` e variantes locais
 - logs, cache, temporários
+- `uploads/` (imagens enviadas)
 
 Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.example`, Prisma schema/migrations, Dockerfiles.
 
@@ -482,9 +523,9 @@ Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.ex
 
 ## Roadmap
 
-1. **FASE 1 — Base** (atual): NestJS, Prisma, Docker, Helmet, CORS, rate limit, Swagger, health.
-2. **FASE 2 — Autenticação:** User, register, login, JWT, refresh, logout, verificação de e-mail, recuperação de senha, guards.
-3. **FASE 3 — Unidades:** HealthUnit, especialidades, horários, imagens, busca, filtros, paginação.
+1. **FASE 1 — Base** (feita): NestJS, Prisma, Docker, Helmet, CORS, rate limit, Swagger, health.
+2. **FASE 2 — Autenticação** (feita): User, register, login, JWT, refresh, logout, verificação de e-mail, recuperação de senha, guards.
+3. **FASE 3 — Unidades** (feita): HealthUnit, especialidades, horários, imagens, busca, filtros, paginação.
 4. **FASE 4 — Paciente:** perfil, favoritos, avaliações, alteração de senha, exclusão de conta.
 5. **FASE 5 — Gestor:** minhas unidades, rascunho, envio para aprovação, edição, motivo de rejeição.
 6. **FASE 6 — Admin:** dashboard, pendências, aprovar/rejeitar, ativar/desativar usuários, especialidades, auditoria.

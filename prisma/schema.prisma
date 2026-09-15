@@ -31,6 +31,7 @@ model User {
   sessions             Session[]
   emailVerifications   EmailVerification[]
   passwordResets       PasswordReset[]
+  healthUnits          HealthUnit[]
 
   @@map("users")
 }
@@ -78,4 +79,118 @@ model PasswordReset {
 
   @@index([userId])
   @@map("password_resets")
+}
+
+enum HealthUnitType {
+  HOSPITAL
+  CLINIC
+}
+
+enum HealthUnitStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model HealthUnit {
+  id               String           @id @default(uuid())
+  ownerId          String
+  name             String
+  type             HealthUnitType
+  description      String?
+  email            String?
+  phone            String?
+  whatsapp         String?
+  website          String?
+  status           HealthUnitStatus @default(INACTIVE)
+  approvalStatus   ApprovalStatus   @default(DRAFT)
+  rejectionReason  String?
+  street           String
+  number           String
+  complement       String?
+  city             String
+  state            String
+  cep              String
+  latitude         Decimal?         @db.Decimal(10, 7)
+  longitude        Decimal?         @db.Decimal(10, 7)
+  averageRating    Decimal          @default(0) @db.Decimal(3, 2)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  owner        User            @relation(fields: [ownerId], references: [id])
+  specialties  UnitSpecialty[]
+  openingHours OpeningHour[]
+  images       UnitImage[]
+
+  @@index([ownerId])
+  @@index([city, state])
+  @@index([type, approvalStatus, status])
+  @@map("health_units")
+}
+
+model Specialty {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  units UnitSpecialty[]
+
+  @@map("specialties")
+}
+
+model UnitSpecialty {
+  unitId      String
+  specialtyId String
+
+  unit      HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  specialty Specialty  @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@id([unitId, specialtyId])
+  @@map("unit_specialties")
+}
+
+model OpeningHour {
+  id        String    @id @default(uuid())
+  unitId    String
+  dayOfWeek DayOfWeek
+  openTime  String
+  closeTime String
+  active    Boolean   @default(true)
+
+  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, dayOfWeek])
+  @@index([unitId])
+  @@map("opening_hours")
+}
+
+model UnitImage {
+  id        String   @id @default(uuid())
+  unitId    String
+  url       String
+  isMain    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+  @@map("unit_images")
 }

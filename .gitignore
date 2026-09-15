@@ -26,6 +26,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# uploaded files
+uploads/
+
 # caches
 .eslintcache
 .cache/

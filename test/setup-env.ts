@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import 'reflect-metadata';
 
 const envPath = resolve(__dirname, '../.env');
 if (existsSync(envPath)) {
