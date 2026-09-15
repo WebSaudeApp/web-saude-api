@@ -10,8 +10,8 @@ web-saude/
 └── web-saude-ui/
 ```
 
-**Versão atual:** `0.0.1` — **FASE 5 (gestor)** concluída.  
-Fases 1–5 prontas. Painel admin (aprovar/rejeitar) ainda **não** está implementado.
+**Versão atual:** `0.0.1` — **FASE 6 (admin)** concluída.  
+Fases 1–6 prontas. CI/CD, logs avançados e 2FA ainda **não** estão implementados.
 
 ---
 
@@ -75,7 +75,7 @@ Visitantes podem pesquisar sem conta.
 | Unidades, especialidades, horários, imagens | Pronto — FASE 3 |
 | Favoritos e avaliações | Pronto — FASE 4 |
 | Fluxo do gestor | Pronto — FASE 5 |
-| Painel admin | Pendente — FASE 6 |
+| Painel admin | Pronto — FASE 6 |
 | CI/CD, logs avançados, 2FA | Pendente — FASE 7 |
 
 ---
@@ -209,7 +209,7 @@ Arquivo: `prisma/schema.prisma`
 - `DATABASE_URL` — queries da aplicação (pooler)
 - `DIRECT_URL` — migrations
 
-Modelos atuais: `User`, `Session`, `EmailVerification`, `PasswordReset`, `HealthUnit`, `Specialty`, `UnitSpecialty`, `OpeningHour`, `UnitImage`, `Review`, `Favorite`.
+Modelos atuais: `User`, `Session`, `EmailVerification`, `PasswordReset`, `HealthUnit`, `Specialty`, `UnitSpecialty`, `OpeningHour`, `UnitImage`, `Review`, `Favorite`, `AuditLog`.
 
 Comandos:
 
@@ -320,7 +320,24 @@ Busca pública (`GET /health-units`) aceita `search`, `type`, `city`, `state`, `
 
 Imagens ficam em `uploads/health-units/` e são servidas em `/uploads/health-units/...`.
 
-Aprovação pelo admin é da **FASE 6**. O gestor envia o rascunho (`POST /health-units/:id/submit`) e a unidade fica `PENDING` até um administrador decidir.
+Aprovação pelo admin: `PATCH /admin/health-units/:id/approve` ou `reject`.
+
+### Painel admin (FASE 6)
+
+| Método | Rota | Auth |
+| --- | --- | --- |
+| `GET` | `/admin/dashboard` | JWT `ADMIN` |
+| `GET` | `/admin/health-units/pending` | JWT `ADMIN` |
+| `PATCH` | `/admin/health-units/:id/approve` | JWT `ADMIN` — `PENDING` → `APPROVED` + `ACTIVE` |
+| `PATCH` | `/admin/health-units/:id/reject` | JWT `ADMIN` — corpo `{ "reason": "..." }` |
+| `GET` | `/admin/users` | JWT `ADMIN` (filtros `role`, `isActive`, paginação) |
+| `PATCH` | `/admin/users/:id/status` | JWT `ADMIN` — `{ "isActive": true\|false }` |
+| `POST` | `/admin/specialties` | JWT `ADMIN` |
+| `PATCH` | `/admin/specialties/:id` | JWT `ADMIN` |
+| `DELETE` | `/admin/specialties/:id` | JWT `ADMIN` (só se não estiver em uso) |
+| `GET` | `/admin/audit` | JWT `ADMIN` |
+
+Admin **não** aprova a própria unidade, **não** altera o próprio status e **não** desativa outros administradores. Ações ficam em `audit_logs`.
 
 ### Fluxo do gestor (FASE 5)
 
@@ -332,13 +349,6 @@ Aprovação pelo admin é da **FASE 6**. O gestor envia o rascunho (`POST /healt
 | `PATCH` | `/health-units/:id/status` | JWT dono — só se `APPROVED` (`ACTIVE` / `INACTIVE`) |
 
 Envio exige ao menos **uma especialidade** e **um horário**. Enquanto estiver `PENDING`, edição de dados, especialidades, horários e imagens retorna **409**. Unidade `REJECTED` devolve `rejectionReason` em `GET /health-units/mine`; ao reenviar, o motivo é limpo.
-
-### Rotas previstas (ainda não existem)
-
-| Método | Rota | Fase |
-| --- | --- | --- |
-| `PATCH` | `/admin/health-units/:id/approve` | 6 |
-| `PATCH` | `/admin/health-units/:id/reject` | 6 |
 
 ---
 
@@ -370,14 +380,14 @@ Módulos atuais:
 | `database` | `PrismaService` global | Continua |
 | `common` | Validação de env | DTOs, filtros, paginação |
 | `auth` | Registro, login, JWT, refresh | 2FA na FASE 7 |
-| `users` | Perfil, senha, exclusão de conta | Papéis no admin |
-| `health-units` | CRUD, busca, envio para aprovação | Moderação no admin |
-| `specialties` | Lista e cadastro | Gestão avançada no admin |
-| `reviews` | Avaliações e média da unidade | Moderação no admin |
+| `users` | Perfil, senha, exclusão de conta | Continua |
+| `health-units` | CRUD, busca, envio para aprovação | Continua |
+| `specialties` | Lista e cadastro | Edição/remoção no admin |
+| `reviews` | Avaliações e média da unidade | Continua |
 | `favorites` | Favoritos do paciente | Continua |
-| `admin` | Esqueleto | Aprovação, dashboard, usuários |
+| `admin` | Dashboard, aprovação, usuários | Continua |
 | `notifications` | Esqueleto | Avisos in-app |
-| `audit` | Esqueleto | Logs de auditoria |
+| `audit` | Logs de ações administrativas | Continua |
 
 ---
 
@@ -452,12 +462,12 @@ npm test
 npm run test:e2e
 ```
 
-Na FASE 5 já há:
+Na FASE 6 já há:
 
 - unitário do `GET /health`, da paginação, da média e do fluxo de envio
-- E2E de auth, unidades, paciente e gestor (envio, 409 em análise, rejeição, republicação)
+- E2E de auth, unidades, paciente, gestor e admin (aprovar, rejeitar, desativar usuário, auditoria)
 
-Ainda virão: aprovação/rejeição pelo admin.
+Ainda virão: CI/CD, logs operacionais e 2FA.
 
 Variáveis mínimas para os testes estão em `test/setup-env.ts`.
 
@@ -554,7 +564,7 @@ Pode ir para o Git: código-fonte, `package.json`, `package-lock.json`, `.env.ex
 3. **FASE 3 — Unidades** (feita): HealthUnit, especialidades, horários, imagens, busca, filtros, paginação.
 4. **FASE 4 — Paciente** (feita): perfil, favoritos, avaliações, alteração de senha, exclusão de conta.
 5. **FASE 5 — Gestor** (feita): minhas unidades, rascunho, envio para aprovação, edição, motivo de rejeição.
-6. **FASE 6 — Admin:** dashboard, pendências, aprovar/rejeitar, ativar/desativar usuários, especialidades, auditoria.
+6. **FASE 6 — Admin** (feita): dashboard, pendências, aprovar/rejeitar, ativar/desativar usuários, especialidades, auditoria.
 7. **FASE 7 — Qualidade:** testes amplos, logs, backup operacional, CI/CD.
 
 Cada fase só avança com autorização explícita.

@@ -34,6 +34,45 @@ export class SpecialtiesService {
     }
   }
 
+  async update(id: string, name: string) {
+    await this.findOrThrow(id);
+    try {
+      return await this.prisma.specialty.update({
+        where: { id },
+        data: { name: name.trim() },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Especialidade já cadastrada.');
+      }
+      throw error;
+    }
+  }
+
+  async remove(id: string) {
+    await this.findOrThrow(id);
+    const inUse = await this.prisma.unitSpecialty.count({
+      where: { specialtyId: id },
+    });
+    if (inUse > 0) {
+      throw new ConflictException(
+        'Não é possível remover especialidade vinculada a unidades.',
+      );
+    }
+    return this.prisma.specialty.delete({ where: { id } });
+  }
+
+  private async findOrThrow(id: string) {
+    const specialty = await this.prisma.specialty.findUnique({ where: { id } });
+    if (!specialty) {
+      throw new NotFoundException('Especialidade não encontrada.');
+    }
+    return specialty;
+  }
+
   async assertIdsExist(ids: string[]): Promise<void> {
     if (ids.length === 0) {
       return;

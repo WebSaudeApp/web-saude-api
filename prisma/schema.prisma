@@ -34,6 +34,7 @@ model User {
   healthUnits          HealthUnit[]
   reviews              Review[]
   favorites            Favorite[]
+  auditLogs            AuditLog[]
 
   @@map("users")
 }
@@ -227,4 +228,21 @@ model Favorite {
   @@id([userId, unitId])
   @@index([unitId])
   @@map("favorites")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
