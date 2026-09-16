@@ -2,12 +2,12 @@
 
 Backend da plataforma **Web Saúde**: busca e consulta de unidades de saúde (hospitais e clínicas).
 
-O frontend (`web-saude-ui`) é um projeto separado. Esta API concentra autenticação, regras de negócio, permissões, validação, acesso ao banco e segurança.
+O frontend (`web-saude-interface`) é um projeto separado. Esta API concentra autenticação, regras de negócio, permissões, validação, acesso ao banco e segurança.
 
 ```
 web-saude/
-├── web-saude-api/    ← este repositório
-└── web-saude-ui/
+├── web-saude-api/         ← este repositório
+└── web-saude-interface/
 ```
 
 **Versão atual:** `0.0.1` — **FASE 7 (qualidade)** concluída.  
