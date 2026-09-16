@@ -37,10 +37,7 @@ export function setupSwagger(app: INestApplication): void {
       'Usuários',
       'Perfil, senha, favoritos e avaliações do usuário autenticado',
     )
-    .addTag(
-      'Unidades de saúde',
-      'Busca pública e gestão das unidades',
-    )
+    .addTag('Unidades de saúde', 'Busca pública e gestão das unidades')
     .addTag('Especialidades', 'Lista e cadastro de especialidades médicas')
     .addTag('Avaliações', 'Edição e exclusão da própria avaliação')
     .addTag(
