@@ -7,7 +7,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { ReviewsService } from './reviews.service';
 
-@ApiTags('reviews')
+@ApiTags('Avaliações')
 @ApiBearerAuth()
 @Controller('reviews')
 export class ReviewsController {

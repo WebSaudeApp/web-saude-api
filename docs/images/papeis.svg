@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title">
+  <title id="title">Papéis da plataforma Web Saúde</title>
+  <rect width="1200" height="380" fill="#f4fbf8"/>
+  <text x="40" y="52" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="700" fill="#0f172a">Papéis</text>
+  <text x="40" y="78" font-family="Segoe UI, system-ui, sans-serif" font-size="14" fill="#64748b">Visitantes pesquisam sem conta. Gestores só editam a própria unidade.</text>
+
+  <g font-family="Segoe UI, system-ui, sans-serif">
+    <rect x="40" y="110" width="265" height="220" rx="16" fill="#fff" stroke="#e2e8f0"/>
+    <circle cx="172" cy="168" r="28" fill="#ccfbf1"/>
+    <circle cx="172" cy="160" r="10" fill="#0f766e"/>
+    <path d="M152 192c4-14 36-14 40 0" fill="#0f766e"/>
+    <text x="172" y="226" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Visitante</text>
+    <text x="172" y="252" text-anchor="middle" font-size="13" fill="#64748b">Busca pública</text>
+    <text x="172" y="274" text-anchor="middle" font-size="13" fill="#64748b">sem login</text>
+  </g>
+
+  <g font-family="Segoe UI, system-ui, sans-serif">
+    <rect x="325" y="110" width="265" height="220" rx="16" fill="#fff" stroke="#e2e8f0"/>
+    <circle cx="457" cy="168" r="28" fill="#ccfbf1"/>
+    <path d="M457 154c8 0 12 10 0 18c-12-8-8-18 0-18z" fill="#0f766e"/>
+    <text x="457" y="226" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Paciente</text>
+    <text x="457" y="252" text-anchor="middle" font-size="13" fill="#64748b">PATIENT</text>
+    <text x="457" y="274" text-anchor="middle" font-size="13" fill="#64748b">favoritos e avaliações</text>
+  </g>
+
+  <g font-family="Segoe UI, system-ui, sans-serif">
+    <rect x="610" y="110" width="265" height="220" rx="16" fill="#fff" stroke="#e2e8f0"/>
+    <circle cx="742" cy="168" r="28" fill="#ccfbf1"/>
+    <rect x="728" y="154" width="28" height="22" rx="4" fill="#0f766e"/>
+    <path d="M724 154l18-10 18 10" fill="#0f766e"/>
+    <text x="742" y="226" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Gestor</text>
+    <text x="742" y="252" text-anchor="middle" font-size="13" fill="#64748b">FUNCTIONAL</text>
+    <text x="742" y="274" text-anchor="middle" font-size="13" fill="#64748b">cadastro da unidade</text>
+  </g>
+
+  <g font-family="Segoe UI, system-ui, sans-serif">
+    <rect x="895" y="110" width="265" height="220" rx="16" fill="#fff" stroke="#e2e8f0"/>
+    <circle cx="1027" cy="168" r="28" fill="#ccfbf1"/>
+    <path d="M1013 168l8 8 20-18" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round"/>
+    <text x="1027" y="226" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Admin</text>
+    <text x="1027" y="252" text-anchor="middle" font-size="13" fill="#64748b">ADMIN</text>
+    <text x="1027" y="274" text-anchor="middle" font-size="13" fill="#64748b">aprovação e auditoria</text>
+  </g>
+</svg>

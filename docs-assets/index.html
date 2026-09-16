@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Saúde — Documentação da API</title>
+  <link rel="icon" href="/docs-assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/docs-assets/app.css">
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="/docs">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8" stroke-linecap="round"/><circle cx="15.2" cy="15.2" r="1.1" fill="#fff" stroke="none"/><circle cx="18.4" cy="13.2" r="1.1" fill="#fff" stroke="none"/><circle cx="16.8" cy="18.2" r="1.1" fill="#fff" stroke="none"/><path d="M15.2 15.2l3.2-2M15.2 15.2l1.6 3"/></svg>
+          </span>
+          <span>Web Saúde</span>
+        </a>
+        <nav class="nav">
+          <a href="#visao" class="is-active">Visão geral</a>
+          <a href="#rotas">Rotas</a>
+          <a href="#papeis">Papéis</a>
+          <span class="chip">API 0.1.0</span>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero" id="visao">
+        <h1>As rotas da plataforma, no mesmo visual do Web Saúde.</h1>
+        <p>Entre com e-mail e senha, como no site. Depois teste busca, favoritos, unidades e o painel admin — sem a cara de Swagger.</p>
+        <form class="card search-bar" id="search-form">
+          <label class="input-icon">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+            <input class="input" id="search" type="search" placeholder="Buscar rota, tag ou descrição" autocomplete="off">
+          </label>
+        </form>
+      </section>
+
+      <section class="steps" id="como">
+        <h2 class="section-title">Como usar</h2>
+        <div class="step-grid">
+          <article class="card step"><b>1</b><strong>Entre na sessão</strong><p>Use a mesma conta do Web Saúde no cartão à esquerda.</p></article>
+          <article class="card step"><b>2</b><strong>Abra uma rota</strong><p>As rotas aparecem como cards, agrupadas por área da plataforma.</p></article>
+          <article class="card step"><b>3</b><strong>Envie o pedido</strong><p>O token vai junto sozinho nas rotas autenticadas.</p></article>
+        </div>
+      </section>
+
+      <section id="papeis">
+        <h2 class="section-title">Papéis</h2>
+        <div class="kpis">
+          <article class="card kpi"><span>Visitante</span><b>Sem login</b><p>Busca unidades publicadas</p></article>
+          <article class="card kpi"><span>Paciente</span><b>PATIENT</b><p>Favoritos, avaliações e perfil</p></article>
+          <article class="card kpi"><span>Gestor</span><b>FUNCTIONAL</b><p>Cadastro e envio para aprovação</p></article>
+          <article class="card kpi"><span>Admin</span><b>ADMIN</b><p>Aprovação, usuários e auditoria</p></article>
+        </div>
+      </section>
+
+      <div class="docs-layout" id="rotas">
+        <aside class="card side" id="session-card"></aside>
+        <div>
+          <div class="toolbar">
+            <h2 class="section-title" style="margin:0">Rotas</h2>
+            <p class="help" id="route-count"></p>
+          </div>
+          <div id="catalog"></div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div>Institucional · Pacientes · Gestores</div>
+        <div>© Web Saúde</div>
+      </div>
+    </footer>
+    <div class="toast" role="status"></div>
+  </div>
+  <script src="/docs-assets/app.js"></script>
+</body>
+</html>

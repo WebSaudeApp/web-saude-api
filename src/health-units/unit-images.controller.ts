@@ -22,7 +22,7 @@ function contentTypeFromBytes(bytes: Buffer): string {
   return 'application/octet-stream';
 }
 
-@ApiTags('health-units')
+@ApiTags('Unidades de saúde')
 @Public()
 @SkipThrottle()
 @Controller('unit-images')

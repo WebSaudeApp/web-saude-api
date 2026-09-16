@@ -39,7 +39,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateReviewDto } from '../reviews/dto/create-review.dto';
 import { ReviewsService } from '../reviews/reviews.service';
 
-@ApiTags('health-units')
+@ApiTags('Unidades de saúde')
 @Controller('health-units')
 export class HealthUnitsController {
   constructor(

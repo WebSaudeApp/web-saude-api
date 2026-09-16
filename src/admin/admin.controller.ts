@@ -22,7 +22,7 @@ import { RejectUnitDto } from './dto/reject-unit.dto';
 import { SetUserStatusDto } from './dto/set-user-status.dto';
 import { UpdateSpecialtyDto } from './dto/update-specialty.dto';
 
-@ApiTags('admin')
+@ApiTags('Administração')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin')

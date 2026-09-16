@@ -2,10 +2,10 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { setupSwagger } from './docs/swagger';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -39,6 +39,9 @@ async function bootstrap(): Promise<void> {
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });
+  app.useStaticAssets(join(process.cwd(), 'docs-assets'), {
+    prefix: '/docs-assets/',
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -48,24 +51,17 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Web Saúde API')
-    .setDescription(
-      'API da plataforma Web Saúde para busca e consulta de unidades de saúde.',
-    )
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
+  const swaggerEnabled = configService.get<boolean>('SWAGGER_ENABLED', false);
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    customSiteTitle: 'Web Saúde API',
-    swaggerOptions: { persistAuthorization: true },
-  });
+  if (swaggerEnabled) {
+    setupSwagger(app);
+  }
 
   await app.listen(port, '0.0.0.0');
   logger.log(`API disponível na porta ${port}`);
-  logger.log(`Swagger disponível em http://localhost:${port}/docs`);
+  if (swaggerEnabled) {
+    logger.log(`Documentação disponível em http://localhost:${port}/docs`);
+  }
 }
 
 void bootstrap();

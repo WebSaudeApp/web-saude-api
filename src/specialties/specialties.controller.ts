@@ -8,7 +8,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CreateSpecialtyDto } from './dto/create-specialty.dto';
 import { SpecialtiesService } from './specialties.service';
 
-@ApiTags('specialties')
+@ApiTags('Especialidades')
 @Controller('specialties')
 export class SpecialtiesController {
   constructor(private readonly specialtiesService: SpecialtiesService) {}

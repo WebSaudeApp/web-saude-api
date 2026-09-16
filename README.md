@@ -2,7 +2,11 @@
 
 Backend da plataforma **Web Saúde**: busca e consulta de unidades de saúde (hospitais e clínicas).
 
+![Capa da Web Saúde API](docs/images/capa.png)
+
 O frontend (`web-saude-interface`) é um projeto separado. Esta API concentra autenticação, regras de negócio, permissões, validação, acesso ao banco e segurança.
+
+Documentação da API no visual da plataforma: [https://web-saude-api.onrender.com/docs](https://web-saude-api.onrender.com/docs)
 
 ```
 web-saude/
@@ -26,7 +30,7 @@ Fases 1–7 prontas. 2FA e avisos in-app ficam como endurecimento futuro.
 - [Banco de dados](#banco-de-dados)
 - [Como rodar](#como-rodar)
 - [Endpoints disponíveis](#endpoints-disponíveis)
-- [Swagger](#swagger)
+- [Documentação](#documentação)
 - [Arquitetura](#arquitetura)
 - [Estrutura de pastas](#estrutura-de-pastas)
 - [Segurança já configurada](#segurança-já-configurada)
@@ -53,6 +57,8 @@ Três papéis autenticados:
 | `ADMIN` | Administrador: aprovação, usuários, especialidades, auditoria |
 
 Visitantes podem pesquisar sem conta.
+
+![Papéis da plataforma](docs/images/papeis.svg)
 
 ---
 
@@ -150,7 +156,7 @@ npm run start:dev
 
 - API: [http://localhost:3000](http://localhost:3000)
 - Health: [http://localhost:3000/health](http://localhost:3000/health)
-- Swagger: [http://localhost:3000/docs](http://localhost:3000/docs)
+- Documentação: [http://localhost:3000/docs](http://localhost:3000/docs)
 
 ---
 
@@ -167,7 +173,7 @@ Todas as variáveis abaixo são **obrigatórias**. A API não sobe se alguma est
 | `DIRECT_URL` | connection string de sessão (porta `5432`) | Prisma Migrate e DDL |
 | `THROTTLE_TTL_MS` | `60000` | Janela do rate limit, em milissegundos |
 | `THROTTLE_LIMIT` | `100` | Máximo de requisições por IP na janela |
-| `SWAGGER_ENABLED` | `true` | `true` em desenvolvimento; `false` em produção |
+| `SWAGGER_ENABLED` | `true` | Painel em `/docs`. `true` em desenvolvimento e na Render atual |
 | `JWT_ACCESS_SECRET` | string longa | Segredo do access token |
 | `JWT_REFRESH_SECRET` | string longa (diferente) | Segredo do refresh token |
 | `JWT_ACCESS_EXPIRES` | `15m` | Validade do access token |
@@ -280,6 +286,10 @@ A API escuta em `http://localhost:${PORT}`.
 
 Cadastro público só `PATIENT` ou `FUNCTIONAL`. Access token ~15 min; refresh 7 dias, revogável.
 
+![Fluxo de autenticação JWT](docs/images/autenticacao.svg)
+
+Entre no portal em `/docs` com e-mail e senha. O token entra sozinho nas rotas autenticadas.
+
 ### Perfil, favoritos e avaliações (FASE 4)
 
 | Método | Rota | Auth |
@@ -350,21 +360,30 @@ Admin **não** aprova a própria unidade, **não** altera o próprio status e **
 
 Envio exige ao menos **uma especialidade** e **um horário**. Enquanto estiver `PENDING`, edição de dados, especialidades, horários e imagens retorna **409**. Unidade `REJECTED` devolve `rejectionReason` em `GET /health-units/mine`; ao reenviar, o motivo é limpo.
 
+![Fluxo de aprovação da unidade](docs/images/fluxo-unidade.svg)
+
 ---
 
-## Swagger
+## Documentação
 
-Com `SWAGGER_ENABLED=true`:
+O `/docs` **não usa Swagger UI**. É um portal no visual do Web Saúde: header, cards, papéis e login com e-mail/senha.
 
-[http://localhost:3000/docs](http://localhost:3000/docs)
+- Local: [http://localhost:3000/docs](http://localhost:3000/docs)
+- Produção: [https://web-saude-api.onrender.com/docs](https://web-saude-api.onrender.com/docs)
 
-A documentação já está preparada para Bearer JWT (usado a partir da FASE 2). Em produção, desligue o Swagger (`SWAGGER_ENABLED=false`).
+Arquivos: `docs-assets/index.html`, `app.css`, `app.js`. A spec OpenAPI continua em `/docs-json` para ferramentas.
+
+Entre com a mesma conta da plataforma. Depois abra uma rota e clique em **Enviar**.
+
+![Portal de documentação Web Saúde](docs/images/portal.png)
 
 ---
 
 ## Arquitetura
 
-Fluxo padrão das próximas fases:
+![Arquitetura da API](docs/images/arquitetura.svg)
+
+Fluxo interno de cada request:
 
 ```
 Controller → DTO / Validation → Guard / Authorization → Service → Prisma → PostgreSQL
@@ -398,7 +417,11 @@ web-saude-api/
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
+├── docs/
+│   └── images/
+├── docs-assets/
 ├── src/
+│   ├── docs/
 │   ├── admin/
 │   ├── audit/
 │   ├── auth/

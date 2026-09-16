@@ -5,7 +5,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../database/prisma.service';
 import { HealthResponseDto, RootResponseDto } from './dto/health-response.dto';
 
-@ApiTags('health')
+@ApiTags('Disponibilidade')
 @Public()
 @Controller()
 export class HealthController {

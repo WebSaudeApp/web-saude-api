@@ -18,7 +18,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { UsersService } from './users.service';
 
-@ApiTags('users')
+@ApiTags('Usuários')
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {

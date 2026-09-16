@@ -13,7 +13,7 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 
-@ApiTags('auth')
+@ApiTags('Autenticação')
 @Public()
 @Throttle({ default: { limit: 8, ttl: 60000 } })
 @Controller('auth')
