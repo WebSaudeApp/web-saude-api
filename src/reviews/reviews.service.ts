@@ -55,7 +55,13 @@ export class ReviewsService {
         where,
         include: {
           ...reviewInclude,
-          unit: { select: { id: true, name: true, city: true, state: true } },
+          unit: {
+            select: {
+              id: true,
+              name: true,
+              address: { select: { cidade: true, estado: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -167,7 +173,11 @@ export class ReviewsService {
 
   private toResponse(
     review: Prisma.ReviewGetPayload<{ include: typeof reviewInclude }> & {
-      unit?: { id: string; name: string; city: string; state: string };
+      unit?: {
+        id: string;
+        name: string;
+        address: { cidade: string; estado: string };
+      };
     },
   ) {
     return {
@@ -178,7 +188,16 @@ export class ReviewsService {
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
       user: review.user,
-      ...(review.unit ? { unit: review.unit } : {}),
+      ...(review.unit
+        ? {
+            unit: {
+              id: review.unit.id,
+              name: review.unit.name,
+              city: review.unit.address.cidade,
+              state: review.unit.address.estado,
+            },
+          }
+        : {}),
     };
   }
 }

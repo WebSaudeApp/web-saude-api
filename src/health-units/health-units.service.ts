@@ -46,6 +46,7 @@ const imageSelect = {
 } as const;
 
 const unitInclude = {
+  address: true,
   specialties: { include: { specialty: true } },
   openingHours: { orderBy: { dayOfWeek: 'asc' as const } },
   images: { orderBy: { createdAt: 'asc' as const }, select: imageSelect },
@@ -71,7 +72,12 @@ export class HealthUnitsService {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
         { description: { contains: query.search, mode: 'insensitive' } },
-        { city: { contains: query.search, mode: 'insensitive' } },
+        {
+          address: { cidade: { contains: query.search, mode: 'insensitive' } },
+        },
+        {
+          address: { bairro: { contains: query.search, mode: 'insensitive' } },
+        },
         {
           specialties: {
             some: {
@@ -87,11 +93,20 @@ export class HealthUnitsService {
     if (query.type) {
       where.type = query.type;
     }
-    if (query.city) {
-      where.city = { equals: query.city, mode: 'insensitive' };
-    }
-    if (query.state) {
-      where.state = { equals: query.state.toUpperCase(), mode: 'insensitive' };
+    if (query.city || query.state) {
+      where.address = {
+        ...(query.city
+          ? { cidade: { equals: query.city, mode: 'insensitive' } }
+          : {}),
+        ...(query.state
+          ? {
+              estado: {
+                equals: query.state.toUpperCase(),
+                mode: 'insensitive',
+              },
+            }
+          : {}),
+      };
     }
     if (query.specialty) {
       where.specialties = {
@@ -141,7 +156,7 @@ export class HealthUnitsService {
     this.assertFunctional(user);
     const unit = await this.prisma.healthUnit.create({
       data: {
-        ownerId: user.id,
+        owner: { connect: { id: user.id } },
         ...this.toCreateData(dto),
         approvalStatus: ApprovalStatus.DRAFT,
         status: HealthUnitStatus.INACTIVE,
@@ -469,15 +484,34 @@ export class HealthUnitsService {
       phone: dto.phone,
       whatsapp: dto.whatsapp,
       website: dto.website,
-      street: dto.street.trim(),
-      number: dto.number.trim(),
-      complement: dto.complement,
-      city: dto.city.trim(),
-      state: dto.state.trim().toUpperCase(),
-      cep: dto.cep.replace(/\D/g, ''),
-      latitude: dto.latitude,
-      longitude: dto.longitude,
+      address: {
+        create: {
+          logradouro: dto.street.trim(),
+          numero: dto.number.trim(),
+          complemento: dto.complement,
+          bairro: dto.neighborhood?.trim(),
+          cidade: dto.city.trim(),
+          estado: dto.state.trim().toUpperCase(),
+          cep: dto.cep.replace(/\D/g, ''),
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+        },
+      },
     };
+  }
+
+  private toAddressUpdateData(dto: UpdateHealthUnitDto) {
+    const data: Prisma.AddressUpdateInput = {};
+    if (dto.street !== undefined) data.logradouro = dto.street.trim();
+    if (dto.number !== undefined) data.numero = dto.number.trim();
+    if (dto.complement !== undefined) data.complemento = dto.complement;
+    if (dto.neighborhood !== undefined) data.bairro = dto.neighborhood.trim();
+    if (dto.city !== undefined) data.cidade = dto.city.trim();
+    if (dto.state !== undefined) data.estado = dto.state.trim().toUpperCase();
+    if (dto.cep !== undefined) data.cep = dto.cep.replace(/\D/g, '');
+    if (dto.latitude !== undefined) data.latitude = dto.latitude;
+    if (dto.longitude !== undefined) data.longitude = dto.longitude;
+    return data;
   }
 
   private toUpdateData(dto: UpdateHealthUnitDto) {
@@ -489,14 +523,8 @@ export class HealthUnitsService {
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.whatsapp !== undefined) data.whatsapp = dto.whatsapp;
     if (dto.website !== undefined) data.website = dto.website;
-    if (dto.street !== undefined) data.street = dto.street.trim();
-    if (dto.number !== undefined) data.number = dto.number.trim();
-    if (dto.complement !== undefined) data.complement = dto.complement;
-    if (dto.city !== undefined) data.city = dto.city.trim();
-    if (dto.state !== undefined) data.state = dto.state.trim().toUpperCase();
-    if (dto.cep !== undefined) data.cep = dto.cep.replace(/\D/g, '');
-    if (dto.latitude !== undefined) data.latitude = dto.latitude;
-    if (dto.longitude !== undefined) data.longitude = dto.longitude;
+    const address = this.toAddressUpdateData(dto);
+    if (Object.keys(address).length > 0) data.address = { update: address };
     return data;
   }
 
@@ -517,14 +545,17 @@ export class HealthUnitsService {
       status: unit.status,
       approvalStatus: unit.approvalStatus,
       rejectionReason: unit.rejectionReason,
-      street: unit.street,
-      number: unit.number,
-      complement: unit.complement,
-      city: unit.city,
-      state: unit.state,
-      cep: unit.cep,
-      latitude: unit.latitude === null ? null : Number(unit.latitude),
-      longitude: unit.longitude === null ? null : Number(unit.longitude),
+      street: unit.address.logradouro,
+      number: unit.address.numero,
+      complement: unit.address.complemento,
+      neighborhood: unit.address.bairro,
+      city: unit.address.cidade,
+      state: unit.address.estado,
+      cep: unit.address.cep,
+      latitude:
+        unit.address.latitude === null ? null : Number(unit.address.latitude),
+      longitude:
+        unit.address.longitude === null ? null : Number(unit.address.longitude),
       averageRating: Number(unit.averageRating),
       createdAt: unit.createdAt,
       updatedAt: unit.updatedAt,

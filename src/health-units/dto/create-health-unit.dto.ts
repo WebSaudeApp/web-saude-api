@@ -71,6 +71,12 @@ export class CreateHealthUnitDto {
   @MaxLength(80)
   complement?: string;
 
+  @ApiPropertyOptional({ example: 'Boa Viagem' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  neighborhood?: string;
+
   @ApiProperty({ example: 'Recife' })
   @IsString()
   @MinLength(2)

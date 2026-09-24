@@ -15,8 +15,7 @@ const favoriteInclude = {
       id: true,
       name: true,
       type: true,
-      city: true,
-      state: true,
+      address: { select: { cidade: true, estado: true } },
       averageRating: true,
       images: {
         where: { isMain: true },
@@ -98,8 +97,13 @@ export class FavoritesService {
       unitId: favorite.unitId,
       createdAt: favorite.createdAt,
       unit: {
-        ...favorite.unit,
+        id: favorite.unit.id,
+        name: favorite.unit.name,
+        type: favorite.unit.type,
+        city: favorite.unit.address.cidade,
+        state: favorite.unit.address.estado,
         averageRating: Number(favorite.unit.averageRating),
+        images: favorite.unit.images,
       },
     };
   }

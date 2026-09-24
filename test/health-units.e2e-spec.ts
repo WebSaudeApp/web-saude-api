@@ -96,6 +96,7 @@ describe('Health units (e2e)', () => {
         type: HealthUnitType.HOSPITAL,
         street: 'Rua das Flores',
         number: '100',
+        neighborhood: 'Boa Viagem',
         city: 'Recife',
         state: 'PE',
         cep: '50000000',
@@ -106,8 +107,12 @@ describe('Health units (e2e)', () => {
       id: string;
       approvalStatus: string;
       ownerId: string;
+      neighborhood: string;
+      city: string;
     };
     expect(createdBody.approvalStatus).toBe(ApprovalStatus.DRAFT);
+    expect(createdBody.neighborhood).toBe('Boa Viagem');
+    expect(createdBody.city).toBe('Recife');
 
     await request(app.getHttpServer())
       .patch(`/health-units/${createdBody.id}`)
@@ -120,6 +125,17 @@ describe('Health units (e2e)', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ name: 'Hospital Teste Recife Atualizado' })
       .expect(200);
+
+    const moved = await request(app.getHttpServer())
+      .patch('/health-units/' + createdBody.id)
+      .set('Authorization', 'Bearer ' + ownerToken)
+      .send({ neighborhood: 'Pina' })
+      .expect(200);
+    expect(moved.body).toMatchObject({
+      neighborhood: 'Pina',
+      street: 'Rua das Flores',
+      city: 'Recife',
+    });
 
     await request(app.getHttpServer())
       .get(`/health-units/${createdBody.id}`)
@@ -155,5 +171,15 @@ describe('Health units (e2e)', () => {
     expect(listedBody.meta.limit).toBe(1);
     expect(listedBody.meta.total).toBeGreaterThanOrEqual(1);
     expect(listedBody.data[0].name).toContain('Hospital Teste Recife');
+
+    const byNeighborhood = await request(app.getHttpServer())
+      .get('/health-units')
+      .query({ search: 'Pina' })
+      .expect(200);
+    expect(
+      (byNeighborhood.body as { data: Array<{ id: string }> }).data.map(
+        (unit) => unit.id,
+      ),
+    ).toContain(createdBody.id);
   });
 });

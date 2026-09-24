@@ -24,6 +24,7 @@ import { SetUserStatusDto } from './dto/set-user-status.dto';
 import { UpdateSpecialtyDto } from './dto/update-specialty.dto';
 
 const pendingInclude = {
+  address: { select: { cidade: true, estado: true } },
   owner: { select: { id: true, name: true, email: true } },
   specialties: { include: { specialty: true } },
   openingHours: { orderBy: { dayOfWeek: 'asc' as const } },
@@ -281,8 +282,8 @@ export class AdminService {
       name: unit.name,
       type: unit.type,
       description: unit.description,
-      city: unit.city,
-      state: unit.state,
+      city: unit.address.cidade,
+      state: unit.address.estado,
       status: unit.status,
       approvalStatus: unit.approvalStatus,
       rejectionReason: unit.rejectionReason,
