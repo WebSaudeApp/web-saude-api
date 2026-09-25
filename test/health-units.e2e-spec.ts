@@ -97,6 +97,10 @@ describe('Health units (e2e)', () => {
         street: 'Rua das Flores',
         number: '100',
         neighborhood: 'Boa Viagem',
+        contacts: [
+          { type: 'TELEFONE', value: '8133334444' },
+          { type: 'EMAIL', value: 'Contato@Hospital.com' },
+        ],
         city: 'Recife',
         state: 'PE',
         cep: '50000000',
@@ -109,10 +113,15 @@ describe('Health units (e2e)', () => {
       ownerId: string;
       neighborhood: string;
       city: string;
+      contacts: Array<{ type: string; value: string }>;
     };
     expect(createdBody.approvalStatus).toBe(ApprovalStatus.DRAFT);
     expect(createdBody.neighborhood).toBe('Boa Viagem');
     expect(createdBody.city).toBe('Recife');
+    expect(createdBody.contacts).toEqual([
+      { type: 'TELEFONE', value: '8133334444' },
+      { type: 'EMAIL', value: 'contato@hospital.com' },
+    ]);
 
     await request(app.getHttpServer())
       .patch(`/health-units/${createdBody.id}`)
@@ -125,6 +134,36 @@ describe('Health units (e2e)', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ name: 'Hospital Teste Recife Atualizado' })
       .expect(200);
+
+    await request(app.getHttpServer())
+      .patch('/health-units/' + createdBody.id)
+      .set('Authorization', 'Bearer ' + ownerToken)
+      .send({ contacts: [{ type: 'EMAIL', value: 'sem-arroba' }] })
+      .expect(400);
+
+    const replaced = await request(app.getHttpServer())
+      .patch('/health-units/' + createdBody.id)
+      .set('Authorization', 'Bearer ' + ownerToken)
+      .send({
+        contacts: [
+          { type: 'TELEFONE', value: '8133334444' },
+          { type: 'WHATSAPP', value: '81999998888' },
+        ],
+      })
+      .expect(200);
+    expect((replaced.body as { contacts: unknown }).contacts).toEqual([
+      { type: 'TELEFONE', value: '8133334444' },
+      { type: 'WHATSAPP', value: '81999998888' },
+    ]);
+
+    expect(replaced.body).not.toHaveProperty('phone');
+    expect(replaced.body).not.toHaveProperty('email');
+
+    await request(app.getHttpServer())
+      .patch('/health-units/' + createdBody.id)
+      .set('Authorization', 'Bearer ' + ownerToken)
+      .send({ phone: '8130000000' })
+      .expect(400);
 
     const moved = await request(app.getHttpServer())
       .patch('/health-units/' + createdBody.id)
@@ -171,6 +210,12 @@ describe('Health units (e2e)', () => {
     expect(listedBody.meta.limit).toBe(1);
     expect(listedBody.meta.total).toBeGreaterThanOrEqual(1);
     expect(listedBody.data[0].name).toContain('Hospital Teste Recife');
+    expect(listedBody.data[0]).toMatchObject({
+      contacts: [
+        { type: 'TELEFONE', value: '8133334444' },
+        { type: 'WHATSAPP', value: '81999998888' },
+      ],
+    });
 
     const byNeighborhood = await request(app.getHttpServer())
       .get('/health-units')

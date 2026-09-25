@@ -101,6 +101,13 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum ContactType {
+  TELEFONE
+  WHATSAPP
+  EMAIL
+  SITE
+}
+
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -117,10 +124,6 @@ model HealthUnit {
   name             String
   type             HealthUnitType
   description      String?
-  email            String?
-  phone            String?
-  whatsapp         String?
-  website          String?
   status           HealthUnitStatus @default(INACTIVE)
   approvalStatus   ApprovalStatus   @default(DRAFT)
   rejectionReason  String?
@@ -132,6 +135,7 @@ model HealthUnit {
 
   owner        User            @relation(fields: [ownerId], references: [id])
   address      Address         @relation(fields: [addressId], references: [id])
+  contacts     Contact[]
   specialties  UnitSpecialty[]
   openingHours OpeningHour[]
   images       UnitImage[]
@@ -161,6 +165,19 @@ model Address {
 
   @@index([cidade, estado])
   @@map("addresses")
+}
+
+model Contact {
+  id        String      @id @default(uuid())
+  unitId    String
+  tipo      ContactType
+  valor     String
+  createdAt DateTime    @default(now())
+
+  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, tipo, valor])
+  @@map("contacts")
 }
 
 model Specialty {

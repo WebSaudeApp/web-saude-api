@@ -2,17 +2,19 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { HealthUnitType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsEmail,
+  ArrayMaxSize,
+  IsArray,
   IsEnum,
   IsNumber,
   IsOptional,
   IsString,
-  IsUrl,
   Max,
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { ContactDto } from './contact.dto';
 
 export class CreateHealthUnitDto {
   @ApiProperty({ example: 'Hospital Recife' })
@@ -31,27 +33,17 @@ export class CreateHealthUnitDto {
   @MaxLength(2000)
   description?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    type: [ContactDto],
+    description:
+      'Lista de contatos. Na edição, substitui todos os contatos da unidade.',
+  })
   @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  phone?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  whatsapp?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsUrl()
-  website?: string;
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ContactDto)
+  contacts?: ContactDto[];
 
   @ApiProperty({ example: 'Rua das Flores' })
   @IsString()

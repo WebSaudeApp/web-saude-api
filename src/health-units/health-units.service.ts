@@ -29,6 +29,7 @@ import {
   canSubmitApproval,
   canTogglePublication,
 } from './unit-workflow.util';
+import { normalizeContacts } from './contacts/contact.util';
 import {
   ALLOWED_IMAGE_MIMES,
   isAllowedImage,
@@ -47,6 +48,9 @@ const imageSelect = {
 
 const unitInclude = {
   address: true,
+  contacts: {
+    orderBy: [{ tipo: 'asc' as const }, { valor: 'asc' as const }],
+  },
   specialties: { include: { specialty: true } },
   openingHours: { orderBy: { dayOfWeek: 'asc' as const } },
   images: { orderBy: { createdAt: 'asc' as const }, select: imageSelect },
@@ -480,10 +484,12 @@ export class HealthUnitsService {
       name: dto.name.trim(),
       type: dto.type,
       description: dto.description,
-      email: dto.email,
-      phone: dto.phone,
-      whatsapp: dto.whatsapp,
-      website: dto.website,
+      contacts: {
+        create: normalizeContacts(dto.contacts ?? []).map((contact) => ({
+          tipo: contact.type,
+          valor: contact.value,
+        })),
+      },
       address: {
         create: {
           logradouro: dto.street.trim(),
@@ -519,10 +525,15 @@ export class HealthUnitsService {
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.type !== undefined) data.type = dto.type;
     if (dto.description !== undefined) data.description = dto.description;
-    if (dto.email !== undefined) data.email = dto.email;
-    if (dto.phone !== undefined) data.phone = dto.phone;
-    if (dto.whatsapp !== undefined) data.whatsapp = dto.whatsapp;
-    if (dto.website !== undefined) data.website = dto.website;
+    if (dto.contacts !== undefined) {
+      data.contacts = {
+        deleteMany: {},
+        create: normalizeContacts(dto.contacts).map((contact) => ({
+          tipo: contact.type,
+          valor: contact.value,
+        })),
+      };
+    }
     const address = this.toAddressUpdateData(dto);
     if (Object.keys(address).length > 0) data.address = { update: address };
     return data;
@@ -538,10 +549,10 @@ export class HealthUnitsService {
       name: unit.name,
       type: unit.type,
       description: unit.description,
-      email: unit.email,
-      phone: unit.phone,
-      whatsapp: unit.whatsapp,
-      website: unit.website,
+      contacts: unit.contacts.map((contact) => ({
+        type: contact.tipo,
+        value: contact.valor,
+      })),
       status: unit.status,
       approvalStatus: unit.approvalStatus,
       rejectionReason: unit.rejectionReason,
