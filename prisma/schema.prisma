@@ -9,84 +9,26 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum UserRole {
-  PATIENT
-  FUNCTIONAL
-  ADMIN
+enum TipoContato {
+  TELEFONE
+  WHATSAPP
+  EMAIL
+  SITE
 }
 
-model User {
-  id             String    @id @default(uuid())
-  name           String
-  email          String    @unique
-  phone          String
-  passwordHash   String
-  role           UserRole
-  emailVerified  Boolean   @default(false)
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
-
-  sessions             Session[]
-  emailVerifications   EmailVerification[]
-  passwordResets       PasswordReset[]
-  healthUnits          HealthUnit[]
-  reviews              Review[]
-  favorites            Favorite[]
-  auditLogs            AuditLog[]
-
-  @@map("users")
+enum TipoMidia {
+  FOTO
+  VIDEO
 }
 
-model Session {
-  id               String    @id @default(uuid())
-  userId           String
-  refreshTokenHash String    @unique
-  userAgent        String?
-  ip               String?
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  createdAt        DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("sessions")
-}
-
-model EmailVerification {
-  id        String    @id @default(uuid())
-  userId    String
-  codeHash  String
-  expiresAt DateTime
-  attempts  Int       @default(0)
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("email_verifications")
-}
-
-model PasswordReset {
-  id        String    @id @default(uuid())
-  userId    String
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("password_resets")
-}
-
-enum HealthUnitType {
-  HOSPITAL
-  CLINIC
+enum DiaSemana {
+  DOMINGO
+  SEGUNDA
+  TERCA
+  QUARTA
+  QUINTA
+  SEXTA
+  SABADO
 }
 
 enum HealthUnitStatus {
@@ -101,133 +43,248 @@ enum ApprovalStatus {
   REJECTED
 }
 
-enum DayOfWeek {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
+model TipoUsuario {
+  id   String @id @default(uuid())
+  nome String @unique
+
+  usuarios Usuario[]
+
+  @@map("tipos_usuario")
 }
 
-model HealthUnit {
-  id               String           @id @default(uuid())
-  ownerId          String
-  name             String
-  type             HealthUnitType
-  description      String?
-  email            String?
-  phone            String?
-  whatsapp         String?
-  website          String?
-  status           HealthUnitStatus @default(INACTIVE)
-  approvalStatus   ApprovalStatus   @default(DRAFT)
-  rejectionReason  String?
-  street           String
-  number           String
-  complement       String?
-  city             String
-  state            String
-  cep              String
-  latitude         Decimal?         @db.Decimal(10, 7)
-  longitude        Decimal?         @db.Decimal(10, 7)
-  averageRating    Decimal          @default(0) @db.Decimal(3, 2)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  deletedAt        DateTime?
+model TipoEstabelecimento {
+  id   String @id @default(uuid())
+  nome String @unique
 
-  owner        User            @relation(fields: [ownerId], references: [id])
-  specialties  UnitSpecialty[]
-  openingHours OpeningHour[]
-  images       UnitImage[]
-  reviews      Review[]
-  favorites    Favorite[]
+  estabelecimentos Estabelecimento[]
+
+  @@map("tipos_estabelecimento")
+}
+
+model Usuario {
+  id            String    @id @default(uuid())
+  nome          String
+  email         String    @unique
+  phone         String
+  cpf           String?
+  genero        String?
+  passwordHash  String
+  tipoId        String
+  enderecoId    String?   @unique
+  emailVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  tipo     TipoUsuario @relation(fields: [tipoId], references: [id])
+  endereco Endereco?   @relation(fields: [enderecoId], references: [id])
+
+  sessions           Session[]
+  emailVerifications EmailVerification[]
+  passwordResets     PasswordReset[]
+  estabelecimentos   Estabelecimento[]
+  reviews            Review[]
+  favorites          Favorite[]
+  auditLogs          AuditLog[]
+  contatos           Contato[]
+
+  @@map("usuarios")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  usuarioId        String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("sessions")
+}
+
+model EmailVerification {
+  id        String    @id @default(uuid())
+  usuarioId String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  usuarioId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("password_resets")
+}
+
+model Estabelecimento {
+  id              String           @id @default(uuid())
+  ownerId         String
+  nome            String
+  tipoId          String
+  description     String?
+  status          HealthUnitStatus @default(INACTIVE)
+  approvalStatus  ApprovalStatus   @default(DRAFT)
+  rejectionReason String?
+  enderecoId      String           @unique
+  averageRating   Decimal          @default(0) @db.Decimal(3, 2)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  owner          Usuario                        @relation(fields: [ownerId], references: [id])
+  tipo           TipoEstabelecimento            @relation(fields: [tipoId], references: [id])
+  endereco       Endereco                       @relation(fields: [enderecoId], references: [id])
+  contatos       Contato[]
+  especialidades EstabelecimentoEspecialidade[]
+  horarios       HorarioFuncionamento[]
+  midias         Midia[]
+  reviews        Review[]
+  favorites      Favorite[]
 
   @@index([ownerId])
-  @@index([city, state])
-  @@index([type, approvalStatus, status])
-  @@map("health_units")
+  @@index([tipoId, approvalStatus, status])
+  @@map("estabelecimentos")
 }
 
-model Specialty {
+model Especialidade {
   id        String   @id @default(uuid())
-  name      String   @unique
+  nome      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  units UnitSpecialty[]
+  estabelecimentos EstabelecimentoEspecialidade[]
 
-  @@map("specialties")
+  @@map("especialidades")
 }
 
-model UnitSpecialty {
-  unitId      String
-  specialtyId String
+model EstabelecimentoEspecialidade {
+  estabelecimentoId String
+  especialidadeId   String
 
-  unit      HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  specialty Specialty  @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
+  especialidade   Especialidade   @relation(fields: [especialidadeId], references: [id], onDelete: Cascade)
 
-  @@id([unitId, specialtyId])
-  @@map("unit_specialties")
+  @@id([estabelecimentoId, especialidadeId])
+  @@map("estabelecimento_especialidades")
 }
 
-model OpeningHour {
-  id        String    @id @default(uuid())
-  unitId    String
-  dayOfWeek DayOfWeek
-  openTime  String
-  closeTime String
-  active    Boolean   @default(true)
+model HorarioFuncionamento {
+  id                String    @id @default(uuid())
+  estabelecimentoId String
+  diaSemana         DiaSemana
+  horaAbertura      DateTime  @db.Time
+  horaFechamento    DateTime  @db.Time
+  atende24h         Boolean   @default(false)
+  active            Boolean   @default(true)
 
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@unique([unitId, dayOfWeek])
-  @@index([unitId])
-  @@map("opening_hours")
+  @@unique([estabelecimentoId, diaSemana])
+  @@index([estabelecimentoId])
+  @@map("horarios_funcionamento")
 }
 
-model UnitImage {
-  id        String   @id @default(uuid())
-  unitId    String
-  url       String
-  isMain    Boolean  @default(false)
-  bytes     Bytes?
-  createdAt DateTime @default(now())
+model Midia {
+  id                String    @id @default(uuid())
+  estabelecimentoId String
+  tipo              TipoMidia @default(FOTO)
+  url               String
+  legenda           String?
+  isMain            Boolean   @default(false)
+  bytes             Bytes?
+  createdAt         DateTime  @default(now())
 
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@index([unitId])
-  @@map("unit_images")
+  @@index([estabelecimentoId])
+  @@map("midias")
+}
+
+model Endereco {
+  id          String   @id @default(uuid())
+  cep         String
+  logradouro  String
+  numero      String
+  complemento String?
+  bairro      String?
+  cidade      String
+  estado      String
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  estabelecimento Estabelecimento?
+  usuario         Usuario?
+
+  @@index([cidade, estado])
+  @@map("enderecos")
+}
+
+model Contato {
+  id                String      @id @default(uuid())
+  estabelecimentoId String?
+  usuarioId         String?
+  tipo              TipoContato
+  valor             String
+  createdAt         DateTime    @default(now())
+
+  estabelecimento Estabelecimento? @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
+  usuario         Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([estabelecimentoId, tipo, valor])
+  @@unique([usuarioId, tipo, valor])
+  @@map("contatos")
 }
 
 model Review {
-  id        String   @id @default(uuid())
-  userId    String
-  unitId    String
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(uuid())
+  autorId           String
+  estabelecimentoId String
+  nota              Int
+  comentario        String?
+  criadoEm          DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  autor           Usuario         @relation(fields: [autorId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, unitId])
-  @@index([unitId])
+  @@unique([autorId, estabelecimentoId])
+  @@index([estabelecimentoId])
   @@map("reviews")
 }
 
 model Favorite {
-  userId    String
-  unitId    String
-  createdAt DateTime @default(now())
+  usuarioId         String
+  estabelecimentoId String
+  createdAt         DateTime @default(now())
 
-  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@id([userId, unitId])
-  @@index([unitId])
+  @@id([usuarioId, estabelecimentoId])
+  @@index([estabelecimentoId])
   @@map("favorites")
 }
 
@@ -240,7 +297,7 @@ model AuditLog {
   metadata   Json?
   createdAt  DateTime @default(now())
 
-  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  actor Usuario @relation(fields: [actorId], references: [id], onDelete: Cascade)
 
   @@index([actorId])
   @@index([entityType, entityId])
