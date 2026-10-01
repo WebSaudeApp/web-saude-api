@@ -9,241 +9,175 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum UserRole {
-  PATIENT
-  FUNCTIONAL
-  ADMIN
+enum TipoContato {
+  TELEFONE
+  WHATSAPP
+  EMAIL
+  SITE
 }
 
-model User {
-  id             String    @id @default(uuid())
-  name           String
-  email          String    @unique
-  phone          String
-  passwordHash   String
-  role           UserRole
-  emailVerified  Boolean   @default(false)
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
-
-  sessions             Session[]
-  emailVerifications   EmailVerification[]
-  passwordResets       PasswordReset[]
-  healthUnits          HealthUnit[]
-  reviews              Review[]
-  favorites            Favorite[]
-  auditLogs            AuditLog[]
-
-  @@map("users")
+enum TipoMidia {
+  FOTO
+  VIDEO
 }
 
-model Session {
-  id               String    @id @default(uuid())
-  userId           String
-  refreshTokenHash String    @unique
-  userAgent        String?
-  ip               String?
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  createdAt        DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("sessions")
+enum DiaSemana {
+  DOMINGO
+  SEGUNDA
+  TERCA
+  QUARTA
+  QUINTA
+  SEXTA
+  SABADO
 }
 
-model EmailVerification {
-  id        String    @id @default(uuid())
-  userId    String
-  codeHash  String
-  expiresAt DateTime
-  attempts  Int       @default(0)
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+model TipoUsuario {
+  id   String @id @default(uuid())
+  nome String @unique
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usuarios Usuario[]
 
-  @@index([userId])
-  @@map("email_verifications")
+  @@map("tipos_usuario")
 }
 
-model PasswordReset {
-  id        String    @id @default(uuid())
-  userId    String
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+model TipoEstabelecimento {
+  id   String @id @default(uuid())
+  nome String @unique
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  estabelecimentos Estabelecimento[]
 
-  @@index([userId])
-  @@map("password_resets")
+  @@map("tipos_estabelecimento")
 }
 
-enum HealthUnitType {
-  HOSPITAL
-  CLINIC
+model Usuario {
+  id         String  @id @default(uuid())
+  nome       String
+  cpf        String?
+  genero     String?
+  tipoId     String
+  enderecoId String? @unique
+
+  tipo     TipoUsuario @relation(fields: [tipoId], references: [id])
+  endereco Endereco?   @relation(fields: [enderecoId], references: [id])
+
+  reviews  Review[]
+  contatos Contato[]
+
+  @@map("usuarios")
 }
 
-enum HealthUnitStatus {
-  ACTIVE
-  INACTIVE
+model Estabelecimento {
+  id         String @id @default(uuid())
+  nome       String
+  tipoId     String
+  enderecoId String @unique
+
+  tipo           TipoEstabelecimento            @relation(fields: [tipoId], references: [id])
+  endereco       Endereco                       @relation(fields: [enderecoId], references: [id])
+  contatos       Contato[]
+  especialidades EstabelecimentoEspecialidade[]
+  horarios       HorarioFuncionamento[]
+  midias         Midia[]
+  reviews        Review[]
+
+  @@index([tipoId])
+  @@map("estabelecimentos")
 }
 
-enum ApprovalStatus {
-  DRAFT
-  PENDING
-  APPROVED
-  REJECTED
+model Especialidade {
+  id   String @id @default(uuid())
+  nome String @unique
+
+  estabelecimentos EstabelecimentoEspecialidade[]
+
+  @@map("especialidades")
 }
 
-enum DayOfWeek {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
+model EstabelecimentoEspecialidade {
+  estabelecimentoId String
+  especialidadeId   String
+
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
+  especialidade   Especialidade   @relation(fields: [especialidadeId], references: [id], onDelete: Cascade)
+
+  @@id([estabelecimentoId, especialidadeId])
+  @@map("estabelecimento_especialidades")
 }
 
-model HealthUnit {
-  id               String           @id @default(uuid())
-  ownerId          String
-  name             String
-  type             HealthUnitType
-  description      String?
-  email            String?
-  phone            String?
-  whatsapp         String?
-  website          String?
-  status           HealthUnitStatus @default(INACTIVE)
-  approvalStatus   ApprovalStatus   @default(DRAFT)
-  rejectionReason  String?
-  street           String
-  number           String
-  complement       String?
-  city             String
-  state            String
-  cep              String
-  latitude         Decimal?         @db.Decimal(10, 7)
-  longitude        Decimal?         @db.Decimal(10, 7)
-  averageRating    Decimal          @default(0) @db.Decimal(3, 2)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  deletedAt        DateTime?
+model HorarioFuncionamento {
+  id                String    @id @default(uuid())
+  estabelecimentoId String
+  diaSemana         DiaSemana
+  horaAbertura      DateTime  @db.Time
+  horaFechamento    DateTime  @db.Time
+  atende24h         Boolean   @default(false)
 
-  owner        User            @relation(fields: [ownerId], references: [id])
-  specialties  UnitSpecialty[]
-  openingHours OpeningHour[]
-  images       UnitImage[]
-  reviews      Review[]
-  favorites    Favorite[]
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@index([ownerId])
-  @@index([city, state])
-  @@index([type, approvalStatus, status])
-  @@map("health_units")
+  @@unique([estabelecimentoId, diaSemana])
+  @@map("horarios_funcionamento")
 }
 
-model Specialty {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Midia {
+  id                String    @id @default(uuid())
+  estabelecimentoId String
+  tipo              TipoMidia @default(FOTO)
+  url               String
+  legenda           String?
+  bytes             Bytes?
 
-  units UnitSpecialty[]
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@map("specialties")
+  @@index([estabelecimentoId])
+  @@map("midias")
 }
 
-model UnitSpecialty {
-  unitId      String
-  specialtyId String
+model Endereco {
+  id          String  @id @default(uuid())
+  cep         String
+  logradouro  String
+  numero      String
+  complemento String?
+  bairro      String?
+  cidade      String
+  estado      String
+  latitude    Float?
+  longitude   Float?
 
-  unit      HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  specialty Specialty  @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento?
+  usuario         Usuario?
 
-  @@id([unitId, specialtyId])
-  @@map("unit_specialties")
+  @@index([cidade, estado])
+  @@map("enderecos")
 }
 
-model OpeningHour {
-  id        String    @id @default(uuid())
-  unitId    String
-  dayOfWeek DayOfWeek
-  openTime  String
-  closeTime String
-  active    Boolean   @default(true)
+model Contato {
+  id                String      @id @default(uuid())
+  estabelecimentoId String?
+  usuarioId         String?
+  tipo              TipoContato
+  valor             String
 
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento? @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
+  usuario         Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  @@unique([unitId, dayOfWeek])
-  @@index([unitId])
-  @@map("opening_hours")
-}
-
-model UnitImage {
-  id        String   @id @default(uuid())
-  unitId    String
-  url       String
-  isMain    Boolean  @default(false)
-  bytes     Bytes?
-  createdAt DateTime @default(now())
-
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@index([unitId])
-  @@map("unit_images")
+  @@unique([estabelecimentoId, tipo, valor])
+  @@unique([usuarioId, tipo, valor])
+  @@map("contatos")
 }
 
 model Review {
-  id        String   @id @default(uuid())
-  userId    String
-  unitId    String
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(uuid())
+  autorId           String
+  estabelecimentoId String
+  nota              Int
+  comentario        String?
+  criadoEm          DateTime @default(now())
 
-  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  autor           Usuario         @relation(fields: [autorId], references: [id], onDelete: Cascade)
+  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, unitId])
-  @@index([unitId])
+  @@unique([autorId, estabelecimentoId])
+  @@index([estabelecimentoId])
   @@map("reviews")
-}
-
-model Favorite {
-  userId    String
-  unitId    String
-  createdAt DateTime @default(now())
-
-  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  unit HealthUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@id([userId, unitId])
-  @@index([unitId])
-  @@map("favorites")
-}
-
-model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String
-  action     String
-  entityType String
-  entityId   String
-  metadata   Json?
-  createdAt  DateTime @default(now())
-
-  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
-
-  @@index([actorId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-  @@map("audit_logs")
 }

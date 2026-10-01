@@ -37,7 +37,3 @@ process.env.CORS_ORIGINS ??= 'http://localhost:5173';
 process.env.THROTTLE_TTL_MS ??= '60000';
 process.env.THROTTLE_LIMIT ??= '100';
 process.env.SWAGGER_ENABLED ??= 'false';
-process.env.JWT_ACCESS_SECRET ??= 'test-access-secret-change-me-32chars';
-process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-change-me-32chars';
-process.env.JWT_ACCESS_EXPIRES ??= '15m';
-process.env.JWT_REFRESH_EXPIRES ??= '7d';

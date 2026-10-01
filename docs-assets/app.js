@@ -1,6 +1,4 @@
 (function () {
-  const TOKEN_KEY = "web-saude-docs-token";
-  const USER_KEY = "web-saude-docs-user";
   const HTTP = ["get", "post", "put", "patch", "delete"];
 
   const toastEl = document.querySelector(".toast");
@@ -25,26 +23,6 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
-  }
-
-  function token() {
-    return localStorage.getItem(TOKEN_KEY) || "";
-  }
-
-  function user() {
-    try {
-      return JSON.parse(localStorage.getItem(USER_KEY) || "null");
-    } catch {
-      return null;
-    }
-  }
-
-  function setSession(accessToken, profile) {
-    if (accessToken) localStorage.setItem(TOKEN_KEY, accessToken);
-    else localStorage.removeItem(TOKEN_KEY);
-    if (profile) localStorage.setItem(USER_KEY, JSON.stringify(profile));
-    else localStorage.removeItem(USER_KEY);
-    renderSession();
   }
 
   function resolve(schema) {
@@ -82,10 +60,6 @@
     return op.requestBody?.content?.["application/json"]?.schema;
   }
 
-  function needsAuth(op) {
-    return Boolean(op.security && op.security.length);
-  }
-
   function buildGroups() {
     const byTag = new Map();
     for (const [path, methods] of Object.entries(spec.paths || {})) {
@@ -115,61 +89,10 @@
   }
 
   function renderSession() {
-    const current = user();
-    if (current) {
-      sessionCard.innerHTML =
-        '<h3>Sessão</h3>' +
-        '<div class="session-user">' +
-        "<strong>" + esc(current.name || current.email) + "</strong>" +
-        '<span class="chip chip-ok">' + esc(current.role || "autenticado") + "</span>" +
-        "</div>" +
-        '<button class="btn btn-ghost btn-lg" type="button" id="logout">Sair</button>' +
-        '<p class="sub">O token entra sozinho nas rotas com cadeado.</p>' +
-        navHtml();
-      document.getElementById("logout").onclick = function () {
-        setSession("", null);
-        toast("Sessão encerrada.");
-      };
-      return;
-    }
-
     sessionCard.innerHTML =
-      "<h3>Entrar</h3>" +
-      '<p class="sub">Mesma conta do Web Saúde. Sem colar JWT.</p>' +
-      '<form id="login-form" class="params">' +
-      '<label class="field"><span>E-mail</span><input class="input" name="email" type="email" placeholder="seu@email.com" required></label>' +
-      '<label class="field"><span>Senha</span><input class="input" name="password" type="password" required></label>' +
-      '<button class="btn btn-primary btn-lg" type="submit">Entrar</button>' +
-      "</form>" +
+      "<h3>Áreas</h3>" +
+      '<p class="sub">Todas as rotas são públicas: é só abrir e enviar.</p>' +
       navHtml();
-
-    document.getElementById("login-form").onsubmit = async function (event) {
-      event.preventDefault();
-      const body = {
-        email: this.email.value,
-        password: this.password.value,
-      };
-      try {
-        const res = await fetch("/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-        toast(
-            Array.isArray(data.message)
-              ? data.message[0]
-              : data.message || "Não foi possível entrar.",
-          );
-          return;
-        }
-        setSession(data.accessToken, data.user || { email: body.email, role: "autenticado" });
-        toast("Sessão iniciada.");
-      } catch {
-        toast("Falha de rede ao entrar.");
-      }
-    };
   }
 
   function navHtml() {
@@ -222,9 +145,6 @@
   }
 
   function routeCard(item) {
-    const auth = needsAuth(item.op)
-      ? '<span class="chip">com login</span>'
-      : '<span class="chip">pública</span>';
     return (
       '<article class="card route" data-id="' +
       esc(item.id) +
@@ -240,7 +160,6 @@
       "</code><small>" +
       esc(item.op.summary || "") +
       "</small></div>" +
-      auth +
       "</button>" +
       '<div class="route-body" hidden>' +
       '<div class="params">' +
@@ -321,10 +240,6 @@
     if (qs) url += "?" + qs;
 
     const headers = { Accept: "application/json" };
-    if (needsAuth(item.op) && token()) {
-      headers.Authorization = "Bearer " + token();
-    }
-
     const init = { method: item.method.toUpperCase(), headers };
     const bodyEl = card.querySelector("[data-body]");
     if (bodyEl && item.method !== "get") {
@@ -347,12 +262,6 @@
       }
       out.textContent = res.status + " " + res.statusText + "\n" + pretty;
       out.classList.add(res.ok ? "is-ok" : "is-err");
-
-      if (item.path === "/auth/login" && res.ok) {
-        const data = JSON.parse(text);
-        setSession(data.accessToken, data.user);
-        toast("Sessão atualizada pelo login da rota.");
-      }
     } catch (err) {
       out.textContent = String(err);
       out.classList.add("is-err");
