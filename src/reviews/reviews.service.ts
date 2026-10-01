@@ -1,184 +1,150 @@
 import {
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, UserRole } from '@prisma/client';
-import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { Prisma } from '@prisma/client';
 import { paginated } from '../common/dto/pagination-query.dto';
 import type { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { PrismaService } from '../database/prisma.service';
-import { publishedUnitWhere } from '../health-units/published-unit';
-import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
-import { computeAverageRating } from './review-rating.util';
+import { CriarReviewDto } from './dto/criar-review.dto';
+import { AtualizarReviewDto } from './dto/atualizar-review.dto';
 
 const reviewInclude = {
-  user: { select: { id: true, name: true } },
+  autor: { select: { id: true, nome: true } },
+  estabelecimento: { select: { id: true, nome: true } },
 } as const;
+
+type ReviewCompleta = Prisma.ReviewGetPayload<{
+  include: typeof reviewInclude;
+}>;
 
 @Injectable()
 export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listByUnit(unitId: string, query: PaginationQueryDto) {
-    await this.findPublishedUnit(unitId);
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const where = { unitId };
-    const [total, reviews] = await this.prisma.$transaction([
-      this.prisma.review.count({ where }),
-      this.prisma.review.findMany({
-        where,
-        include: reviewInclude,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-    ]);
-    return paginated(
-      reviews.map((review) => this.toResponse(review)),
-      total,
-      page,
-      limit,
-    );
+  async listByEstabelecimento(
+    estabelecimentoId: string,
+    query: PaginationQueryDto,
+  ) {
+    await this.assertEstabelecimento(estabelecimentoId);
+    return this.list({ estabelecimentoId }, query);
   }
 
-  async listMine(user: AuthenticatedUser, query: PaginationQueryDto) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const where = { userId: user.id };
-    const [total, reviews] = await this.prisma.$transaction([
-      this.prisma.review.count({ where }),
-      this.prisma.review.findMany({
-        where,
-        include: {
-          ...reviewInclude,
-          unit: { select: { id: true, name: true, city: true, state: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-    ]);
-    return paginated(
-      reviews.map((review) => this.toResponse(review)),
-      total,
-      page,
-      limit,
-    );
+  async listByAutor(autorId: string, query: PaginationQueryDto) {
+    const autor = await this.prisma.usuario.findUnique({
+      where: { id: autorId },
+    });
+    if (!autor) {
+      throw new NotFoundException('Usuário não encontrado.');
+    }
+    return this.list({ autorId }, query);
   }
 
-  async create(user: AuthenticatedUser, unitId: string, dto: CreateReviewDto) {
-    this.assertPatient(user);
-    const unit = await this.findPublishedUnit(unitId);
-    if (unit.ownerId === user.id) {
-      throw new ForbiddenException('Você não pode avaliar a própria unidade.');
+  async create(estabelecimentoId: string, dto: CriarReviewDto) {
+    await this.assertEstabelecimento(estabelecimentoId);
+    const autor = await this.prisma.usuario.findUnique({
+      where: { id: dto.autorId },
+    });
+    if (!autor) {
+      throw new NotFoundException('Usuário autor não encontrado.');
     }
 
     try {
       const review = await this.prisma.review.create({
         data: {
-          userId: user.id,
-          unitId,
-          rating: dto.rating,
-          comment: dto.comment?.trim() || null,
+          autorId: dto.autorId,
+          estabelecimentoId,
+          nota: dto.nota,
+          comentario: dto.comentario?.trim() || null,
         },
         include: reviewInclude,
       });
-      await this.recalculateAverage(unitId);
       return this.toResponse(review);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException('Você já avaliou esta unidade.');
+        throw new ConflictException(
+          'Este usuário já avaliou este estabelecimento.',
+        );
       }
       throw error;
     }
   }
 
-  async update(user: AuthenticatedUser, id: string, dto: UpdateReviewDto) {
-    const review = await this.findOwned(user, id);
-    const updated = await this.prisma.review.update({
+  async update(id: string, dto: AtualizarReviewDto) {
+    await this.findOrThrow(id);
+    const review = await this.prisma.review.update({
       where: { id },
       data: {
-        ...(dto.rating !== undefined ? { rating: dto.rating } : {}),
-        ...(dto.comment !== undefined
-          ? { comment: dto.comment.trim() || null }
+        ...(dto.nota !== undefined ? { nota: dto.nota } : {}),
+        ...(dto.comentario !== undefined
+          ? { comentario: dto.comentario.trim() || null }
           : {}),
       },
       include: reviewInclude,
     });
-    await this.recalculateAverage(review.unitId);
-    return this.toResponse(updated);
+    return this.toResponse(review);
   }
 
-  async remove(user: AuthenticatedUser, id: string) {
-    const review = await this.findOwned(user, id);
+  async remove(id: string) {
+    await this.findOrThrow(id);
     await this.prisma.review.delete({ where: { id } });
-    await this.recalculateAverage(review.unitId);
     return { message: 'Avaliação removida.' };
   }
 
-  private async findOwned(user: AuthenticatedUser, id: string) {
+  private async list(
+    where: Prisma.ReviewWhereInput,
+    query: PaginationQueryDto,
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const [total, reviews] = await this.prisma.$transaction([
+      this.prisma.review.count({ where }),
+      this.prisma.review.findMany({
+        where,
+        include: reviewInclude,
+        orderBy: { criadoEm: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+    return paginated(
+      reviews.map((review) => this.toResponse(review)),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  private async findOrThrow(id: string) {
     const review = await this.prisma.review.findUnique({ where: { id } });
     if (!review) {
       throw new NotFoundException('Avaliação não encontrada.');
     }
-    if (review.userId !== user.id) {
-      throw new ForbiddenException(
-        'Você não pode alterar a avaliação de outra pessoa.',
-      );
-    }
     return review;
   }
 
-  private async findPublishedUnit(unitId: string) {
-    const unit = await this.prisma.healthUnit.findFirst({
-      where: { id: unitId, ...publishedUnitWhere },
+  private async assertEstabelecimento(id: string): Promise<void> {
+    const estabelecimento = await this.prisma.estabelecimento.findUnique({
+      where: { id },
+      select: { id: true },
     });
-    if (!unit) {
-      throw new NotFoundException('Unidade não encontrada.');
-    }
-    return unit;
-  }
-
-  private assertPatient(user: AuthenticatedUser): void {
-    if (user.role !== UserRole.PATIENT) {
-      throw new ForbiddenException('Apenas pacientes avaliam unidades.');
+    if (!estabelecimento) {
+      throw new NotFoundException('Estabelecimento não encontrado.');
     }
   }
 
-  private async recalculateAverage(unitId: string): Promise<void> {
-    const reviews = await this.prisma.review.findMany({
-      where: { unitId },
-      select: { rating: true },
-    });
-    await this.prisma.healthUnit.update({
-      where: { id: unitId },
-      data: {
-        averageRating: computeAverageRating(reviews.map((item) => item.rating)),
-      },
-    });
-  }
-
-  private toResponse(
-    review: Prisma.ReviewGetPayload<{ include: typeof reviewInclude }> & {
-      unit?: { id: string; name: string; city: string; state: string };
-    },
-  ) {
+  private toResponse(review: ReviewCompleta) {
     return {
       id: review.id,
-      unitId: review.unitId,
-      rating: review.rating,
-      comment: review.comment,
-      createdAt: review.createdAt,
-      updatedAt: review.updatedAt,
-      user: review.user,
-      ...(review.unit ? { unit: review.unit } : {}),
+      nota: review.nota,
+      comentario: review.comentario,
+      criadoEm: review.criadoEm,
+      autor: review.autor,
+      estabelecimento: review.estabelecimento,
     };
   }
 }

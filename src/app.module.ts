@@ -4,21 +4,15 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AllExceptionsFilter } from './common/http/all-exceptions.filter';
 import { RequestLoggingInterceptor } from './common/http/request-logging.interceptor';
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { RolesGuard } from './auth/guards/roles.guard';
-import { AdminModule } from './admin/admin.module';
-import { AuditModule } from './audit/audit.module';
-import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { validate } from './common/config/env.validation';
 import { DatabaseModule } from './database/database.module';
-import { FavoritesModule } from './favorites/favorites.module';
 import { HealthModule } from './health/health.module';
-import { HealthUnitsModule } from './health-units/health-units.module';
+import { EstabelecimentosModule } from './estabelecimentos/estabelecimentos.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
-import { SpecialtiesModule } from './specialties/specialties.module';
-import { UsersModule } from './users/users.module';
+import { EspecialidadesModule } from './especialidades/especialidades.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
 
 @Module({
   imports: [
@@ -40,15 +34,11 @@ import { UsersModule } from './users/users.module';
     DatabaseModule,
     CommonModule,
     HealthModule,
-    AuthModule,
-    UsersModule,
-    HealthUnitsModule,
-    SpecialtiesModule,
+    UsuariosModule,
+    EstabelecimentosModule,
+    EspecialidadesModule,
     ReviewsModule,
-    FavoritesModule,
-    AdminModule,
     NotificationsModule,
-    AuditModule,
   ],
   providers: [
     {
@@ -62,14 +52,6 @@ import { UsersModule } from './users/users.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
     },
   ],
 })

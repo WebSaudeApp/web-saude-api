@@ -178,5 +178,6 @@ model Review {
   estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
   @@unique([autorId, estabelecimentoId])
+  @@index([estabelecimentoId])
   @@map("reviews")
 }
