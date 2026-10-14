@@ -31,18 +31,6 @@ enum DiaSemana {
   SABADO
 }
 
-enum HealthUnitStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum ApprovalStatus {
-  DRAFT
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model TipoUsuario {
   id   String @id @default(uuid())
   nome String @unique
@@ -62,97 +50,28 @@ model TipoEstabelecimento {
 }
 
 model Usuario {
-  id            String    @id @default(uuid())
-  nome          String
-  email         String    @unique
-  phone         String
-  cpf           String?
-  genero        String?
-  passwordHash  String
-  tipoId        String
-  enderecoId    String?   @unique
-  emailVerified Boolean   @default(false)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  id         String  @id @default(uuid())
+  nome       String
+  cpf        String?
+  genero     String?
+  tipoId     String
+  enderecoId String? @unique
 
   tipo     TipoUsuario @relation(fields: [tipoId], references: [id])
   endereco Endereco?   @relation(fields: [enderecoId], references: [id])
 
-  sessions           Session[]
-  emailVerifications EmailVerification[]
-  passwordResets     PasswordReset[]
-  estabelecimentos   Estabelecimento[]
-  reviews            Review[]
-  favorites          Favorite[]
-  auditLogs          AuditLog[]
-  contatos           Contato[]
+  reviews  Review[]
+  contatos Contato[]
 
   @@map("usuarios")
 }
 
-model Session {
-  id               String    @id @default(uuid())
-  usuarioId        String
-  refreshTokenHash String    @unique
-  userAgent        String?
-  ip               String?
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  createdAt        DateTime  @default(now())
-
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@index([usuarioId])
-  @@map("sessions")
-}
-
-model EmailVerification {
-  id        String    @id @default(uuid())
-  usuarioId String
-  codeHash  String
-  expiresAt DateTime
-  attempts  Int       @default(0)
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@index([usuarioId])
-  @@map("email_verifications")
-}
-
-model PasswordReset {
-  id        String    @id @default(uuid())
-  usuarioId String
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@index([usuarioId])
-  @@map("password_resets")
-}
-
 model Estabelecimento {
-  id              String           @id @default(uuid())
-  ownerId         String
-  nome            String
-  tipoId          String
-  description     String?
-  status          HealthUnitStatus @default(INACTIVE)
-  approvalStatus  ApprovalStatus   @default(DRAFT)
-  rejectionReason String?
-  enderecoId      String           @unique
-  averageRating   Decimal          @default(0) @db.Decimal(3, 2)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
+  id         String @id @default(uuid())
+  nome       String
+  tipoId     String
+  enderecoId String @unique
 
-  owner          Usuario                        @relation(fields: [ownerId], references: [id])
   tipo           TipoEstabelecimento            @relation(fields: [tipoId], references: [id])
   endereco       Endereco                       @relation(fields: [enderecoId], references: [id])
   contatos       Contato[]
@@ -160,18 +79,14 @@ model Estabelecimento {
   horarios       HorarioFuncionamento[]
   midias         Midia[]
   reviews        Review[]
-  favorites      Favorite[]
 
-  @@index([ownerId])
-  @@index([tipoId, approvalStatus, status])
+  @@index([tipoId])
   @@map("estabelecimentos")
 }
 
 model Especialidade {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id   String @id @default(uuid())
+  nome String @unique
 
   estabelecimentos EstabelecimentoEspecialidade[]
 
@@ -196,12 +111,10 @@ model HorarioFuncionamento {
   horaAbertura      DateTime  @db.Time
   horaFechamento    DateTime  @db.Time
   atende24h         Boolean   @default(false)
-  active            Boolean   @default(true)
 
   estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
   @@unique([estabelecimentoId, diaSemana])
-  @@index([estabelecimentoId])
   @@map("horarios_funcionamento")
 }
 
@@ -211,9 +124,7 @@ model Midia {
   tipo              TipoMidia @default(FOTO)
   url               String
   legenda           String?
-  isMain            Boolean   @default(false)
   bytes             Bytes?
-  createdAt         DateTime  @default(now())
 
   estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
@@ -222,7 +133,7 @@ model Midia {
 }
 
 model Endereco {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   cep         String
   logradouro  String
   numero      String
@@ -232,8 +143,6 @@ model Endereco {
   estado      String
   latitude    Float?
   longitude   Float?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
   estabelecimento Estabelecimento?
   usuario         Usuario?
@@ -248,7 +157,6 @@ model Contato {
   usuarioId         String?
   tipo              TipoContato
   valor             String
-  createdAt         DateTime    @default(now())
 
   estabelecimento Estabelecimento? @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
   usuario         Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -265,7 +173,6 @@ model Review {
   nota              Int
   comentario        String?
   criadoEm          DateTime @default(now())
-  updatedAt         DateTime @updatedAt
 
   autor           Usuario         @relation(fields: [autorId], references: [id], onDelete: Cascade)
   estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
@@ -273,34 +180,4 @@ model Review {
   @@unique([autorId, estabelecimentoId])
   @@index([estabelecimentoId])
   @@map("reviews")
-}
-
-model Favorite {
-  usuarioId         String
-  estabelecimentoId String
-  createdAt         DateTime @default(now())
-
-  usuario         Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
-
-  @@id([usuarioId, estabelecimentoId])
-  @@index([estabelecimentoId])
-  @@map("favorites")
-}
-
-model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String
-  action     String
-  entityType String
-  entityId   String
-  metadata   Json?
-  createdAt  DateTime @default(now())
-
-  actor Usuario @relation(fields: [actorId], references: [id], onDelete: Cascade)
-
-  @@index([actorId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-  @@map("audit_logs")
 }
