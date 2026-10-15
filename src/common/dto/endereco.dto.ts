@@ -53,21 +53,19 @@ export class EnderecoDto {
   @MaxLength(2)
   estado!: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty({ example: -8.0476 })
   @Type(() => Number)
   @IsNumber()
   @Min(-90)
   @Max(90)
-  latitude?: number;
+  latitude!: number;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty({ example: -34.877 })
   @Type(() => Number)
   @IsNumber()
   @Min(-180)
   @Max(180)
-  longitude?: number;
+  longitude!: number;
 }
 
 export class UpdateEnderecoDto extends PartialType(EnderecoDto) {}

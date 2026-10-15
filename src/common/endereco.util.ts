@@ -10,8 +10,8 @@ export function toEnderecoCreate(dto: EnderecoDto): Prisma.EnderecoCreateInput {
     bairro: dto.bairro?.trim() || null,
     cidade: dto.cidade.trim(),
     estado: dto.estado.trim().toUpperCase(),
-    latitude: dto.latitude ?? null,
-    longitude: dto.longitude ?? null,
+    latitude: dto.latitude,
+    longitude: dto.longitude,
   };
 }
 

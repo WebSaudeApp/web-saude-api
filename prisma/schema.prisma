@@ -141,8 +141,8 @@ model Endereco {
   bairro      String?
   cidade      String
   estado      String
-  latitude    Float?
-  longitude   Float?
+  latitude    Float
+  longitude   Float
 
   estabelecimento Estabelecimento?
   usuario         Usuario?

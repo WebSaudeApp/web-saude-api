@@ -33,6 +33,8 @@ const ENDERECO_OBRIGATORIOS = [
   'numero',
   'cidade',
   'estado',
+  'latitude',
+  'longitude',
 ] as const;
 
 @Injectable()
