@@ -1,41 +1,35 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { IsOptional, IsString, Matches } from 'class-validator';
+import { PaginacaoQueryDto } from '../../common/dto/paginacao-query.dto';
 
-export class BuscarEstabelecimentosDto extends PaginationQueryDto {
+export class BuscarEstabelecimentosDto extends PaginacaoQueryDto {
   @ApiPropertyOptional({
     description: 'Busca em nome, cidade, bairro e especialidades',
   })
   @IsOptional()
-  @IsString()
-  search?: string;
+  @IsString({ message: 'Informe um texto.' })
+  termo?: string;
 
   @ApiPropertyOptional({ example: 'HOSPITAL' })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Informe um texto.' })
   tipo?: string;
 
   @ApiPropertyOptional({ description: 'Id ou nome da especialidade' })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Informe um texto.' })
   especialidade?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Informe um texto.' })
   cidade?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'PE', minLength: 2, maxLength: 2 })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Informe a sigla de duas letras da UF.' })
+  @Matches(/^[a-z]{2}$/i, {
+    message: 'Informe a sigla de duas letras da UF.',
+  })
   estado?: string;
-
-  @ApiPropertyOptional({ minimum: 1, maximum: 5 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  @Max(5)
-  notaMinima?: number;
 }

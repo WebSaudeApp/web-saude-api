@@ -6,7 +6,7 @@ import {
 import { Prisma, TipoMidia } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { normalizeContatos } from '../common/contatos.util';
-import { paginated } from '../common/dto/pagination-query.dto';
+import { paginada } from '../common/dto/paginacao-query.dto';
 import {
   toEnderecoCreate,
   toEnderecoResponse,
@@ -51,6 +51,23 @@ type EstabelecimentoCompleto = Prisma.EstabelecimentoGetPayload<{
 
 type Nota = { notaMedia: number; totalReviews: number };
 
+const CARACTERES_ACENTUADOS = 'áàâãäéèêëíìîïóòôõöúùûüç';
+const CARACTERES_SEM_ACENTO = 'aaaaaeeeeiiiiooooouuuuc';
+
+export function tipoEstabelecimentoArmazenado(tipo: string): string {
+  return tipo.trim().toLocaleUpperCase('pt-BR') === 'CLINICA'
+    ? 'CLINIC'
+    : tipo.trim();
+}
+
+function normalizarTexto(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim();
+}
+
 @Injectable()
 export class EstabelecimentosService {
   constructor(
@@ -59,58 +76,45 @@ export class EstabelecimentosService {
   ) {}
 
   listTypes() {
-    return this.prisma.tipoEstabelecimento.findMany({
-      orderBy: { nome: 'asc' },
-    });
+    return this.prisma.tipoEstabelecimento
+      .findMany({ orderBy: { nome: 'asc' } })
+      .then((tipos) =>
+        tipos.map((tipo) => ({
+          ...tipo,
+          nome: tipo.nome === 'CLINIC' ? 'CLINICA' : tipo.nome,
+        })),
+      );
   }
 
   async search(query: BuscarEstabelecimentosDto) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const pagina = query.pagina ?? 1;
+    const limite = query.limite ?? 20;
     const where: Prisma.EstabelecimentoWhereInput = {};
 
-    if (query.search) {
-      const contains = { contains: query.search, mode: 'insensitive' as const };
-      where.OR = [
-        { nome: contains },
-        { endereco: { cidade: contains } },
-        { endereco: { bairro: contains } },
-        { especialidades: { some: { especialidade: { nome: contains } } } },
-      ];
-    }
     if (query.tipo) {
-      where.tipo = { nome: { equals: query.tipo, mode: 'insensitive' } };
-    }
-    if (query.cidade || query.estado) {
-      where.endereco = {
-        ...(query.cidade
-          ? { cidade: { equals: query.cidade, mode: 'insensitive' } }
-          : {}),
-        ...(query.estado
-          ? { estado: { equals: query.estado, mode: 'insensitive' } }
-          : {}),
-      };
-    }
-    if (query.especialidade) {
-      where.especialidades = {
-        some: {
-          OR: [
-            { especialidadeId: query.especialidade },
-            {
-              especialidade: {
-                nome: { equals: query.especialidade, mode: 'insensitive' },
-              },
-            },
-          ],
+      const tipo = query.tipo.trim();
+      where.tipo = {
+        nome: {
+          equals: tipoEstabelecimentoArmazenado(tipo),
+          mode: 'insensitive',
         },
       };
     }
-    if (query.notaMinima) {
-      const comNota = await this.prisma.review.groupBy({
-        by: ['estabelecimentoId'],
-        having: { nota: { _avg: { gte: query.notaMinima } } },
+    const texto = query.termo?.trim();
+    const cidade = query.cidade?.trim();
+    const especialidade = query.especialidade?.trim();
+    if (texto || cidade || especialidade) {
+      const estabelecimentos = await this.filtrarTexto({
+        texto,
+        cidade,
+        especialidade,
       });
-      where.id = { in: comNota.map((item) => item.estabelecimentoId) };
+      where.id = { in: estabelecimentos };
+    }
+    if (query.estado) {
+      where.endereco = {
+        estado: { equals: query.estado.trim(), mode: 'insensitive' },
+      };
     }
 
     const [total, estabelecimentos] = await this.prisma.$transaction([
@@ -118,19 +122,81 @@ export class EstabelecimentosService {
       this.prisma.estabelecimento.findMany({
         where,
         include: estabelecimentoInclude,
-        orderBy: { nome: 'asc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        orderBy: [{ nome: 'asc' }, { id: 'asc' }],
+        skip: (pagina - 1) * limite,
+        take: limite,
       }),
     ]);
-    const notas = await this.notas(estabelecimentos.map((item) => item.id));
 
-    return paginated(
-      estabelecimentos.map((item) => this.toResponse(item, notas.get(item.id))),
+    return paginada(
+      estabelecimentos.map((item) => this.toBuscaResponse(item)),
       total,
-      page,
-      limit,
+      pagina,
+      limite,
     );
+  }
+
+  private async filtrarTexto(filtros: {
+    texto?: string;
+    cidade?: string;
+    especialidade?: string;
+  }): Promise<string[]> {
+    const condicoes: Prisma.Sql[] = [];
+    const textoNormalizado = filtros.texto
+      ? normalizarTexto(filtros.texto)
+      : undefined;
+    const cidadeNormalizada = filtros.cidade
+      ? normalizarTexto(filtros.cidade)
+      : undefined;
+    const especialidadeNormalizada = filtros.especialidade
+      ? normalizarTexto(filtros.especialidade)
+      : undefined;
+
+    if (textoNormalizado) {
+      condicoes.push(Prisma.sql`(
+        strpos(translate(lower(e."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+        OR strpos(translate(lower(a."cidade"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+        OR strpos(translate(lower(a."bairro"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+        OR EXISTS (
+          SELECT 1
+          FROM "estabelecimento_especialidades" ee
+          JOIN "especialidades" esp ON esp."id" = ee."especialidadeId"
+          WHERE ee."estabelecimentoId" = e."id"
+            AND strpos(translate(lower(esp."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+        )
+      )`);
+    }
+    if (cidadeNormalizada) {
+      condicoes.push(
+        Prisma.sql`translate(lower(a."cidade"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = ${cidadeNormalizada}`,
+      );
+    }
+    if (filtros.especialidade && especialidadeNormalizada) {
+      condicoes.push(Prisma.sql`EXISTS (
+        SELECT 1
+        FROM "estabelecimento_especialidades" ee
+        JOIN "especialidades" esp ON esp."id" = ee."especialidadeId"
+        WHERE ee."estabelecimentoId" = e."id"
+          AND (
+            esp."id" = ${filtros.especialidade}
+            OR translate(lower(esp."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = ${especialidadeNormalizada}
+          )
+      )`);
+    }
+
+    if (condicoes.length === 0) {
+      return [];
+    }
+
+    const matches = await this.prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT e."id"
+        FROM "estabelecimentos" e
+        JOIN "enderecos" a ON a."id" = e."enderecoId"
+        WHERE ${Prisma.join(condicoes, ' AND ')}
+      `,
+    );
+    return matches.map(({ id }) => id);
   }
 
   async findOne(id: string) {
@@ -328,6 +394,14 @@ export class EstabelecimentosService {
 
   private toResponse(item: EstabelecimentoCompleto, nota?: Nota) {
     return {
+      ...this.toBuscaResponse(item),
+      notaMedia: nota?.notaMedia ?? 0,
+      totalReviews: nota?.totalReviews ?? 0,
+    };
+  }
+
+  private toBuscaResponse(item: EstabelecimentoCompleto) {
+    return {
       id: item.id,
       nome: item.nome,
       tipo: item.tipo,
@@ -348,8 +422,6 @@ export class EstabelecimentosService {
         atende24h: horario.atende24h,
       })),
       midias: item.midias,
-      notaMedia: nota?.notaMedia ?? 0,
-      totalReviews: nota?.totalReviews ?? 0,
     };
   }
 }
