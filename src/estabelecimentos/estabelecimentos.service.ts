@@ -54,10 +54,9 @@ type Nota = { notaMedia: number; totalReviews: number };
 const CARACTERES_ACENTUADOS = 'áàâãäéèêëíìîïóòôõöúùûüç';
 const CARACTERES_SEM_ACENTO = 'aaaaaeeeeiiiiooooouuuuc';
 
+// Os tipos ficam gravados em maiúsculas: HOSPITAL e CLINICA (RN05).
 export function tipoEstabelecimentoArmazenado(tipo: string): string {
-  return tipo.trim().toLocaleUpperCase('pt-BR') === 'CLINICA'
-    ? 'CLINIC'
-    : tipo.trim();
+  return tipo.trim().toLocaleUpperCase('pt-BR');
 }
 
 function normalizarTexto(texto: string): string {
@@ -76,14 +75,9 @@ export class EstabelecimentosService {
   ) {}
 
   listTypes() {
-    return this.prisma.tipoEstabelecimento
-      .findMany({ orderBy: { nome: 'asc' } })
-      .then((tipos) =>
-        tipos.map((tipo) => ({
-          ...tipo,
-          nome: tipo.nome === 'CLINIC' ? 'CLINICA' : tipo.nome,
-        })),
-      );
+    return this.prisma.tipoEstabelecimento.findMany({
+      orderBy: { nome: 'asc' },
+    });
   }
 
   async search(query: BuscarEstabelecimentosDto) {

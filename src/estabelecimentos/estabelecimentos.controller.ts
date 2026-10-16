@@ -14,7 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { PaginacaoQueryDto } from '../common/dto/paginacao-query.dto';
 import { CriarReviewDto } from '../reviews/dto/criar-review.dto';
 import { ReviewsService } from '../reviews/reviews.service';
 import { AdicionarMidiaDto } from './dto/adicionar-midia.dto';
@@ -87,7 +87,7 @@ export class EstabelecimentosController {
 
   @Get(':id/reviews')
   @ApiOperation({ summary: 'Lista as avaliações do estabelecimento' })
-  listReviews(@Param('id') id: string, @Query() query: PaginationQueryDto) {
+  listReviews(@Param('id') id: string, @Query() query: PaginacaoQueryDto) {
     return this.reviewsService.listByEstabelecimento(id, query);
   }
 

@@ -20,7 +20,7 @@ export class AtualizarEstabelecimentoDto {
   @MaxLength(160)
   nome?: string;
 
-  @ApiPropertyOptional({ example: 'CLINIC' })
+  @ApiPropertyOptional({ example: 'CLINICA' })
   @IsOptional()
   @IsString()
   @MinLength(1)

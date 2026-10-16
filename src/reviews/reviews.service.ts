@@ -6,6 +6,8 @@ import {
 import { Prisma } from '@prisma/client';
 import { paginated } from '../common/dto/pagination-query.dto';
 import type { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { paginada } from '../common/dto/paginacao-query.dto';
+import type { PaginacaoQueryDto } from '../common/dto/paginacao-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import { CriarReviewDto } from './dto/criar-review.dto';
 import { AtualizarReviewDto } from './dto/atualizar-review.dto';
@@ -23,12 +25,21 @@ type ReviewCompleta = Prisma.ReviewGetPayload<{
 export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Avaliações de um estabelecimento (UC01, A5): paginação da RN08, com
+  // pagina, limite e a resposta { dados, paginacao }.
   async listByEstabelecimento(
     estabelecimentoId: string,
-    query: PaginationQueryDto,
+    query: PaginacaoQueryDto,
   ) {
     await this.assertEstabelecimento(estabelecimentoId);
-    return this.list({ estabelecimentoId }, query);
+    const pagina = query.pagina ?? 1;
+    const limite = query.limite ?? 20;
+    const { total, reviews } = await this.buscarPagina(
+      { estabelecimentoId },
+      pagina,
+      limite,
+    );
+    return paginada(reviews, total, pagina, limite);
   }
 
   async listByAutor(autorId: string, query: PaginationQueryDto) {
@@ -101,22 +112,29 @@ export class ReviewsService {
   ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const { total, reviews } = await this.buscarPagina(where, page, limit);
+    return paginated(reviews, total, page, limit);
+  }
+
+  private async buscarPagina(
+    where: Prisma.ReviewWhereInput,
+    pagina: number,
+    limite: number,
+  ) {
     const [total, reviews] = await this.prisma.$transaction([
       this.prisma.review.count({ where }),
       this.prisma.review.findMany({
         where,
         include: reviewInclude,
         orderBy: { criadoEm: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pagina - 1) * limite,
+        take: limite,
       }),
     ]);
-    return paginated(
-      reviews.map((review) => this.toResponse(review)),
+    return {
       total,
-      page,
-      limit,
-    );
+      reviews: reviews.map((review) => this.toResponse(review)),
+    };
   }
 
   private async findOrThrow(id: string) {
