@@ -43,7 +43,7 @@ describe('ReviewsService', () => {
     findMany.mockResolvedValue([]);
   });
 
-  it('lists the reviews from the newest to the oldest with rating, comment, date and author (A5)', async () => {
+  it('lista as avaliações da mais recente para a mais antiga, com nota, comentário, data e autor (A5)', async () => {
     count.mockResolvedValue(3);
     findMany.mockResolvedValue([
       review('3', '2026-10-03T10:00:00.000Z'),
@@ -73,7 +73,7 @@ describe('ReviewsService', () => {
     });
   });
 
-  it('paginates the reviews with pagina and limite (A5, RN08)', async () => {
+  it('pagina as avaliações com pagina e limite (A5, RN08)', async () => {
     count.mockResolvedValue(45);
 
     const result = await service.listByEstabelecimento(
@@ -92,7 +92,7 @@ describe('ReviewsService', () => {
     });
   });
 
-  it('uses 20 reviews per page by default (A5, RN08)', async () => {
+  it('usa 20 avaliações por página como padrão (A5, RN08)', async () => {
     await service.listByEstabelecimento(
       'estabelecimento-1',
       new PaginacaoQueryDto(),
@@ -103,7 +103,7 @@ describe('ReviewsService', () => {
     );
   });
 
-  it('throws 404 when the establishment does not exist anymore (A5, E8)', async () => {
+  it('lança 404 quando o estabelecimento não existe mais (A5, E8)', async () => {
     findUnique.mockResolvedValue(null);
 
     await expect(

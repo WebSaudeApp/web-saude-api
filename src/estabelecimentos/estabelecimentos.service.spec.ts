@@ -70,7 +70,7 @@ describe('EstabelecimentosService', () => {
     groupBy.mockResolvedValue([]);
   });
 
-  it('returns the search results with default pagination and mapped model fields', async () => {
+  it('devolve o resultado com a paginação padrão e os campos dos models (RN07, RN08, RN11)', async () => {
     count.mockResolvedValue(21);
     findMany.mockResolvedValue([estabelecimento]);
 
@@ -106,7 +106,7 @@ describe('EstabelecimentosService', () => {
     expect(queryRaw).not.toHaveBeenCalled();
   });
 
-  it('combines filters, normalizes text and matches CLINICA type (RN05, RN08)', async () => {
+  it('combina os filtros, normaliza o texto e compara o tipo como CLINICA (RN05, RN08)', async () => {
     queryRaw.mockResolvedValue([{ id: estabelecimento.id }]);
     findMany.mockResolvedValue([estabelecimento]);
     count.mockResolvedValue(1);
@@ -147,7 +147,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  it('returns empty results with zero pages when no establishments match (E1)', async () => {
+  it('devolve lista vazia e zero páginas quando nenhum estabelecimento atende ao filtro (E1)', async () => {
     const result = await service.search(
       Object.assign(new BuscarEstabelecimentosDto(), { pagina: 3, limite: 10 }),
     );
@@ -163,7 +163,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  it('returns empty list preserving real total when page is beyond last page (E5)', async () => {
+  it('devolve lista vazia mantendo o total real quando a página passa da última (E5)', async () => {
     count.mockResolvedValue(15);
     findMany.mockResolvedValue([]);
 
@@ -180,7 +180,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  it('filters specialty by ID when an id format is provided (A2, RN06)', async () => {
+  it('filtra a especialidade pelo id quando ele é enviado (A2, RN06)', async () => {
     const query = Object.assign(new BuscarEstabelecimentosDto(), {
       especialidade: 'especialidade-uuid-1',
     });
@@ -192,15 +192,15 @@ describe('EstabelecimentosService', () => {
     expect(sql.values).toContain('especialidade-uuid-1');
   });
 
-  it('throws internal error when database transaction fails (E6)', async () => {
-    findMany.mockRejectedValue(new Error('Database offline'));
+  it('lança erro interno quando a consulta ao banco falha (E6)', async () => {
+    findMany.mockRejectedValue(new Error('Banco de dados fora do ar'));
 
     await expect(
       service.search(new BuscarEstabelecimentosDto()),
-    ).rejects.toThrow('Database offline');
+    ).rejects.toThrow('Banco de dados fora do ar');
   });
 
-  it('returns the full establishment when the id exists (step 11, RN11, RN12)', async () => {
+  it('devolve o estabelecimento completo quando o id existe (passo 11, RN11, RN12)', async () => {
     const horario = {
       id: 'horario-1',
       diaSemana: 'SEGUNDA',
@@ -237,7 +237,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  it('throws 404 when the establishment id does not exist (E8)', async () => {
+  it('lança 404 quando o id do estabelecimento não existe (E8)', async () => {
     findUnique.mockResolvedValue(null);
 
     await expect(service.findOne('nao-existe')).rejects.toThrow(
@@ -245,7 +245,7 @@ describe('EstabelecimentosService', () => {
     );
   });
 
-  it('returns empty list without error when tipo does not exist like LABORATORIO (RN05, E1, CA07)', async () => {
+  it('devolve lista vazia, sem erro, quando o tipo não existe, como LABORATORIO (RN05, E1, CA07)', async () => {
     count.mockResolvedValue(0);
     findMany.mockResolvedValue([]);
 
@@ -266,7 +266,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  it('returns empty list when specialty does not match any record in raw query (RN06, E1)', async () => {
+  it('devolve lista vazia quando a especialidade não corresponde a nenhum registro (RN06, E1)', async () => {
     queryRaw.mockResolvedValue([]);
     count.mockResolvedValue(0);
     findMany.mockResolvedValue([]);
@@ -289,7 +289,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  it('searches by partial term or neighborhood ignoring case and accents (RN02, RN03, CA02, CA10)', async () => {
+  it('busca por parte do termo ou pelo bairro ignorando maiúsculas e acentos (RN02, RN03, CA02, CA10)', async () => {
     queryRaw.mockResolvedValue([{ id: estabelecimento.id }]);
     count.mockResolvedValue(1);
     findMany.mockResolvedValue([estabelecimento]);
@@ -309,7 +309,7 @@ describe('EstabelecimentosService', () => {
     expect(result.dados).toHaveLength(1);
   });
 
-  it('calculates pagination accurately for partial last page with 23 items (RN08, A3, A4, CA06)', async () => {
+  it('calcula a paginação na última página parcial com 23 itens (RN08, A3, A4, CA06)', async () => {
     count.mockResolvedValue(23);
     findMany.mockResolvedValue([
       estabelecimento,
