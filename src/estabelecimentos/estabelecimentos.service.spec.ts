@@ -244,4 +244,98 @@ describe('EstabelecimentosService', () => {
       new NotFoundException('Estabelecimento não encontrado.'),
     );
   });
+
+  it('returns empty list without error when tipo does not exist like LABORATORIO (RN05, E1, CA07)', async () => {
+    count.mockResolvedValue(0);
+    findMany.mockResolvedValue([]);
+
+    const query = Object.assign(new BuscarEstabelecimentosDto(), {
+      tipo: 'LABORATORIO',
+    });
+
+    const result = await service.search(query);
+
+    expect(result).toEqual({
+      dados: [],
+      paginacao: {
+        pagina: 1,
+        limite: 20,
+        total: 0,
+        totalPaginas: 0,
+      },
+    });
+  });
+
+  it('returns empty list when specialty does not match any record in raw query (RN06, E1)', async () => {
+    queryRaw.mockResolvedValue([]);
+    count.mockResolvedValue(0);
+    findMany.mockResolvedValue([]);
+
+    const query = Object.assign(new BuscarEstabelecimentosDto(), {
+      especialidade: 'Especialidade Inexistente',
+    });
+
+    const result = await service.search(query);
+
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      dados: [],
+      paginacao: {
+        pagina: 1,
+        limite: 20,
+        total: 0,
+        totalPaginas: 0,
+      },
+    });
+  });
+
+  it('searches by partial term or neighborhood ignoring case and accents (RN02, RN03, CA02, CA10)', async () => {
+    queryRaw.mockResolvedValue([{ id: estabelecimento.id }]);
+    count.mockResolvedValue(1);
+    findMany.mockResolvedValue([estabelecimento]);
+
+    const query = Object.assign(new BuscarEstabelecimentosDto(), {
+      termo: 'Boa Viagem',
+      cidade: 'São Paulo',
+    });
+
+    const result = await service.search(query);
+
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    const sql = queryRaw.mock.calls[0][0];
+    expect(sql.values).toEqual(
+      expect.arrayContaining(['boa viagem', 'sao paulo']),
+    );
+    expect(result.dados).toHaveLength(1);
+  });
+
+  it('calculates pagination accurately for partial last page with 23 items (RN08, A3, A4, CA06)', async () => {
+    count.mockResolvedValue(23);
+    findMany.mockResolvedValue([
+      estabelecimento,
+      { ...estabelecimento, id: 'estabelecimento-2' },
+      { ...estabelecimento, id: 'estabelecimento-3' },
+    ]);
+
+    const query = Object.assign(new BuscarEstabelecimentosDto(), {
+      pagina: 3,
+      limite: 10,
+    });
+
+    const result = await service.search(query);
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skip: 20,
+        take: 10,
+      }),
+    );
+    expect(result.dados).toHaveLength(3);
+    expect(result.paginacao).toEqual({
+      pagina: 3,
+      limite: 10,
+      total: 23,
+      totalPaginas: 3,
+    });
+  });
 });
