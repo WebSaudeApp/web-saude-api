@@ -23,27 +23,14 @@ export function setupSwagger(app: INestApplication): void {
   }
 
   const config = builder
-    .addBearerAuth({
-      type: 'http',
-      scheme: 'bearer',
-      bearerFormat: 'JWT',
-    })
     .addTag('Disponibilidade', 'Status da API e conexão com o PostgreSQL')
     .addTag(
-      'Autenticação',
-      'Cadastro, login, JWT, verificação de e-mail e recuperação de senha',
+      'Estabelecimentos',
+      'Busca e cadastro de estabelecimentos, horários, especialidades e fotos',
     )
-    .addTag(
-      'Usuários',
-      'Perfil, senha, favoritos e avaliações do usuário autenticado',
-    )
-    .addTag('Unidades de saúde', 'Busca pública e gestão das unidades')
-    .addTag('Especialidades', 'Lista e cadastro de especialidades médicas')
-    .addTag('Avaliações', 'Edição e exclusão da própria avaliação')
-    .addTag(
-      'Administração',
-      'Painel do ADMIN: aprovação, usuários, especialidades e auditoria',
-    )
+    .addTag('Usuários', 'Cadastro de usuários, endereço e contatos')
+    .addTag('Especialidades', 'Cadastro de especialidades médicas')
+    .addTag('Avaliações', 'Edição e exclusão de avaliações')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

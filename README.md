@@ -328,6 +328,8 @@ Favorito duplicado e avaliação duplicada retornam **409**. Gestor não avalia 
 
 Busca pública (`GET /health-units`) aceita `search`, `type`, `city`, `state`, `specialty`, `rating`, `sort` (`name` \| `createdAt` \| `rating`) e paginação `page` / `limit` (máx. 100). Resposta: `{ data, meta }`.
 
+Detalhes das alterações da pesquisa de estabelecimentos (UC01): [docs/casos-de-uso/UC01-pesquisar-estabelecimentos.md](docs/casos-de-uso/UC01-pesquisar-estabelecimentos.md).
+
 Imagens ficam em `uploads/health-units/` e são servidas em `/uploads/health-units/...`.
 
 Aprovação pelo admin: `PATCH /admin/health-units/:id/approve` ou `reject`.
