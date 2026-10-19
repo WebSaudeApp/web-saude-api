@@ -22,7 +22,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "es:init": "ts-node src/busca/scripts/inicializar-indice.ts"
+    "es:init": "ts-node src/busca/scripts/inicializar-indice.ts",
+    "reindex": "ts-node src/busca/scripts/reindexar.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.2",

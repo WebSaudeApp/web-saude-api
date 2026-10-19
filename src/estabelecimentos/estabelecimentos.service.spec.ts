@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { EspecialidadesService } from '../especialidades/especialidades.service';
+import { BuscaService } from '../busca/busca.service';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
 import { EstabelecimentosService } from './estabelecimentos.service';
 
@@ -30,9 +31,26 @@ describe('EstabelecimentosService', () => {
       Promise.all(operations),
     ),
   } as unknown as PrismaService;
+  const indexarEstabelecimento = jest.fn<(args: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+  const removerEstabelecimento = jest.fn<(args: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+  const obterCliente = jest.fn(() => ({
+    indices: {
+      refresh: jest.fn<() => Promise<void>>(() => Promise.resolve()),
+    },
+  }));
+  const buscaService = {
+    indexarEstabelecimento,
+    removerEstabelecimento,
+    obterCliente,
+  } as unknown as BuscaService;
   const service = new EstabelecimentosService(
     prisma,
     {} as EspecialidadesService,
+    buscaService,
   );
 
   const estabelecimento = {
@@ -336,6 +354,89 @@ describe('EstabelecimentosService', () => {
       limite: 10,
       total: 23,
       totalPaginas: 3,
+    });
+  });
+
+  describe('Sincronização com o Elasticsearch (BE-15)', () => {
+    it('sincroniza o estabelecimento com o Elasticsearch com sucesso', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.sincronizarComElasticsearch(estabelecimento.id);
+
+      expect(indexarEstabelecimento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: estabelecimento.id,
+          nome: estabelecimento.nome,
+          localizacao: {
+            lat: estabelecimento.endereco.latitude,
+            lon: estabelecimento.endereco.longitude,
+          },
+        }),
+      );
+    });
+
+    it('não lança erro quando a indexação no Elasticsearch falha (resiliência / tolerância a falhas)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+      indexarEstabelecimento.mockRejectedValue(
+        new Error('Elasticsearch fora do ar'),
+      );
+
+      await expect(
+        service.sincronizarComElasticsearch(estabelecimento.id),
+      ).resolves.toBeUndefined();
+    });
+
+    it('remove o estabelecimento do Elasticsearch com sucesso', async () => {
+      await service.removerDoElasticsearch(estabelecimento.id);
+
+      expect(removerEstabelecimento).toHaveBeenCalledWith(estabelecimento.id);
+    });
+
+    it('não lança erro quando a remoção no Elasticsearch falha', async () => {
+      removerEstabelecimento.mockRejectedValue(
+        new Error('Elasticsearch fora do ar'),
+      );
+
+      await expect(
+        service.removerDoElasticsearch(estabelecimento.id),
+      ).resolves.toBeUndefined();
+    });
+
+    it('reindexa todos os estabelecimentos do banco com sucesso (BE-16)', async () => {
+      findMany.mockResolvedValue([
+        { id: 'estabelecimento-1' },
+        { id: 'estabelecimento-2' },
+      ]);
+      findUnique.mockResolvedValue(estabelecimento);
+      indexarEstabelecimento.mockResolvedValue(undefined);
+
+      const resultado = await service.reindexarTodos();
+
+      expect(resultado).toEqual({
+        total: 2,
+        indexados: 2,
+        erros: 0,
+        falhas: [],
+      });
+      expect(indexarEstabelecimento).toHaveBeenCalledTimes(2);
+    });
+
+    it('registra falha individual e continua reindexando os demais estabelecimentos', async () => {
+      findMany.mockResolvedValue([
+        { id: 'estabelecimento-1' },
+        { id: 'estabelecimento-2' },
+      ]);
+      findUnique
+        .mockResolvedValueOnce(estabelecimento)
+        .mockRejectedValueOnce(new Error('Erro no estabelecimento 2'));
+
+      const resultado = await service.reindexarTodos();
+
+      expect(resultado.total).toBe(2);
+      expect(resultado.indexados).toBe(1);
+      expect(resultado.erros).toBe(1);
+      expect(resultado.falhas).toHaveLength(1);
+      expect(resultado.falhas[0].id).toBe('estabelecimento-2');
     });
   });
 });

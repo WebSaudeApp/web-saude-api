@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, TipoMidia } from '@prisma/client';
@@ -15,6 +16,8 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { arredondarNota } from '../reviews/nota.util';
 import { EspecialidadesService } from '../especialidades/especialidades.service';
+import { BuscaService } from '../busca/busca.service';
+import { mapearEstabelecimentoParaDocumento } from '../busca/documento-estabelecimento';
 import { AdicionarMidiaDto } from './dto/adicionar-midia.dto';
 import { CriarEstabelecimentoDto } from './dto/criar-estabelecimento.dto';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
@@ -69,9 +72,12 @@ function normalizarTexto(texto: string): string {
 
 @Injectable()
 export class EstabelecimentosService {
+  private readonly logger = new Logger(EstabelecimentosService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly especialidadesService: EspecialidadesService,
+    private readonly buscaService: BuscaService,
   ) {}
 
   listTypes() {
@@ -210,7 +216,9 @@ export class EstabelecimentosService {
         contatos: { create: contatos },
       },
     });
-    return this.findOne(estabelecimento.id);
+    const resposta = await this.findOne(estabelecimento.id);
+    await this.sincronizarComElasticsearch(estabelecimento.id);
+    return resposta;
   }
 
   async update(id: string, dto: AtualizarEstabelecimentoDto) {
@@ -230,7 +238,9 @@ export class EstabelecimentosService {
       };
     }
     await this.prisma.estabelecimento.update({ where: { id }, data });
-    return this.findOne(id);
+    const resposta = await this.findOne(id);
+    await this.sincronizarComElasticsearch(id);
+    return resposta;
   }
 
   async remove(id: string) {
@@ -241,6 +251,7 @@ export class EstabelecimentosService {
         where: { id: estabelecimento.enderecoId },
       }),
     ]);
+    await this.removerDoElasticsearch(id);
     return { message: 'Estabelecimento removido.' };
   }
 
@@ -258,7 +269,9 @@ export class EstabelecimentosService {
         })),
       }),
     ]);
-    return this.findOne(id);
+    const resposta = await this.findOne(id);
+    await this.sincronizarComElasticsearch(id);
+    return resposta;
   }
 
   async setOpeningHours(id: string, dto: DefinirHorariosDto) {
@@ -290,7 +303,78 @@ export class EstabelecimentosService {
       }),
       this.prisma.horarioFuncionamento.createMany({ data: horarios }),
     ]);
-    return this.findOne(id);
+    const resposta = await this.findOne(id);
+    await this.sincronizarComElasticsearch(id);
+    return resposta;
+  }
+
+  async sincronizarComElasticsearch(id: string): Promise<void> {
+    try {
+      const resposta = await this.findOne(id);
+      const documento = mapearEstabelecimentoParaDocumento(resposta);
+      await this.buscaService.indexarEstabelecimento(documento);
+    } catch (erro) {
+      this.logger.warn(
+        `Falha ao sincronizar estabelecimento ${id} no Elasticsearch: ${String(erro)}`,
+      );
+    }
+  }
+
+  async removerDoElasticsearch(id: string): Promise<void> {
+    try {
+      await this.buscaService.removerEstabelecimento(id);
+    } catch (erro) {
+      this.logger.warn(
+        `Falha ao remover estabelecimento ${id} do Elasticsearch: ${String(erro)}`,
+      );
+    }
+  }
+
+  async reindexarTodos(): Promise<{
+    total: number;
+    indexados: number;
+    erros: number;
+    falhas: Array<{ id: string; erro: string }>;
+  }> {
+    const todos = await this.prisma.estabelecimento.findMany({
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+
+    let indexados = 0;
+    let erros = 0;
+    const falhas: Array<{ id: string; erro: string }> = [];
+
+    for (const item of todos) {
+      try {
+        const resposta = await this.findOne(item.id);
+        const documento = mapearEstabelecimentoParaDocumento(resposta);
+        await this.buscaService.indexarEstabelecimento(documento);
+        indexados++;
+      } catch (erro) {
+        erros++;
+        const mensagem = String(erro);
+        this.logger.error(
+          `Falha ao reindexar estabelecimento ${item.id}: ${mensagem}`,
+        );
+        falhas.push({ id: item.id, erro: mensagem });
+      }
+    }
+
+    try {
+      await this.buscaService
+        .obterCliente()
+        .indices.refresh({ index: 'estabelecimentos' });
+    } catch {
+      // Se refresh falhar, não impede o resultado
+    }
+
+    return {
+      total: todos.length,
+      indexados,
+      erros,
+      falhas,
+    };
   }
 
   async addImage(

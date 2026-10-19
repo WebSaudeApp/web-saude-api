@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/database/prisma.service';
 import { BuscaService } from '../src/busca/busca.service';
 import { DocumentoEstabelecimento } from '../src/busca/documento-estabelecimento';
 
@@ -81,7 +82,16 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue({
+        $connect: jest.fn().mockResolvedValue(undefined),
+        $disconnect: jest.fn().mockResolvedValue(undefined),
+        onModuleInit: jest.fn().mockResolvedValue(undefined),
+        onModuleDestroy: jest.fn().mockResolvedValue(undefined),
+        isDatabaseConnected: jest.fn().mockResolvedValue(true),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -205,5 +215,66 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
       (i) => i.estabelecimento.id === docEsperanca.id,
     );
     expect(itemEsperanca?.distanciaKm).toBeCloseTo(2.82, 1);
+  });
+
+  describe('Sincronização com o Banco de Dados (BE-15)', () => {
+    it('cadastra/atualiza estabelecimento no índice e reflete nas buscas', async () => {
+      const docNovo: DocumentoEstabelecimento = {
+        id: 'teste-sinc-1',
+        nome: 'Posto de Saúde Santo Amaro',
+        tipo: { id: 'tipo-posto', nome: 'POSTO' },
+        endereco: {
+          cep: '50100-000',
+          logradouro: 'Rua do Pombal',
+          numero: '30',
+          cidade: 'Recife',
+          estado: 'PE',
+        },
+        localizacao: { lat: -8.0505, lon: -34.8825 },
+        especialidades: [{ id: 'esp-clin', nome: 'Clínica Geral' }],
+      };
+
+      await buscaService.indexarEstabelecimento(docNovo);
+      await buscaService
+        .obterCliente()
+        .indices.refresh({ index: 'estabelecimentos' });
+
+      const busca = await buscaService.buscarEstabelecimentos({
+        termo: 'Santo Amaro',
+      });
+      const ids = busca.itens.map((i) => i.estabelecimento.id);
+      expect(ids).toContain(docNovo.id);
+
+      // Edição de dados (nome e especialidade)
+      const docAtualizado = {
+        ...docNovo,
+        nome: 'Centro de Saúde Especializado Santo Amaro',
+        especialidades: [
+          { id: 'esp-clin', nome: 'Clínica Geral' },
+          { id: 'esp-ped', nome: 'Pediatria' },
+        ],
+      };
+      await buscaService.indexarEstabelecimento(docAtualizado);
+      await buscaService
+        .obterCliente()
+        .indices.refresh({ index: 'estabelecimentos' });
+
+      const buscaEditado = await buscaService.buscarEstabelecimentos({
+        termo: 'Pediatria',
+      });
+      const idsEditado = buscaEditado.itens.map((i) => i.estabelecimento.id);
+      expect(idsEditado).toContain(docNovo.id);
+
+      // Exclusão do estabelecimento: deve sumir da busca
+      await buscaService.removerEstabelecimento(docNovo.id);
+      await buscaService
+        .obterCliente()
+        .indices.refresh({ index: 'estabelecimentos' });
+
+      const docExcluido = await buscaService.obterEstabelecimentoPorId(
+        docNovo.id,
+      );
+      expect(docExcluido).toBeNull();
+    });
   });
 });
