@@ -94,6 +94,7 @@ Visitantes podem pesquisar sem conta.
 | TypeScript | Linguagem |
 | PostgreSQL 16 | Banco de dados |
 | Prisma 6 | ORM e migrations |
+| Elasticsearch 8 | Busca textual e geográfica (geo_distance) |
 | Supabase | PostgreSQL hospedado (padrão atual) |
 | JWT + refresh token | Autenticação |
 | Swagger | Documentação da API |
@@ -536,6 +537,56 @@ docker compose down
 Credenciais locais padrão: usuário `postgres`, senha `postgres`, banco `websaude`, porta `5432`.
 
 Redis está **comentado** no `docker-compose.yml`, reservado para cache/filas (BullMQ) em fase futura. Não subir Redis só por subir.
+
+### Elasticsearch local
+
+O Elasticsearch é utilizado para a busca textual tolerante a variações e acentos (`asciifolding`) e busca geográfica por proximidade (`geo_distance` / `geo_point`).
+
+```bash
+# Subir o Elasticsearch local com Docker (porta 9200)
+docker compose up -d elasticsearch
+
+# Verificar status do serviço
+docker compose ps elasticsearch
+
+# Testar se o nó está respondendo
+curl -s http://localhost:9200/_cat/health?v
+
+# Ver logs do Elasticsearch
+docker compose logs -f elasticsearch
+
+# Parar o serviço
+docker compose stop elasticsearch
+
+# Subir a interface visual do Kibana (opcional, porta 5601)
+docker compose up -d kibana
+```
+
+**Kibana (Painel Visual):**
+- Acesse via navegador em: [http://localhost:5601](http://localhost:5601)
+- Permite gerenciar índices, checar mapeamentos e utilizar a ferramenta **Dev Tools** para testes manuais de consultas DSL (`geo_distance`, `match`, etc.).
+
+**Configurações do container local:**
+- Imagem: `docker.elastic.co/elasticsearch/elasticsearch:8.15.2` (nó único: `discovery.type=single-node`)
+- Limites de memória: `512MB` de heap JVM (`ES_JAVA_OPTS=-Xms512m -Xmx512m`)
+- Segurança local: `xpack.security.enabled=false` (acesso direto em `http://localhost:9200` para agilizar desenvolvimento)
+- Persistência: volume nomeado `elasticsearch_data` em `/usr/share/elasticsearch/data`
+- Healthcheck: validação contínua da saúde do cluster a cada 10s
+
+#### Decisão de Produção para o Elasticsearch
+
+Como o **Render** (onde a API está hospedada) não fornece serviço gerenciado de Elasticsearch, foram avaliadas as seguintes opções para o ambiente de produção:
+
+1. **Elastic Cloud (SaaS gerenciado da Elastic):**
+   - *Custo estimado:* ~\$16 a \$30 / mês (cluster de entrada com 1GB a 2GB RAM).
+   - *Vantagens:* Gerenciado diretamente pela Elastic, com backups, patches de segurança e alta confiabilidade automáticos.
+   - *Conexão:* HTTPS com `ELASTICSEARCH_NODE` e `ELASTICSEARCH_API_KEY` (ou Basic Auth).
+2. **Servidor VPS Próprio (Hetzner / DigitalOcean / AWS Lightsail):**
+   - *Custo estimado:* ~\$6 a \$12 / mês (instância 4GB RAM rodando Elasticsearch em Docker atrás de proxy SSL).
+   - *Vantagens:* Custo fixo previsível e maior capacidade de memória para a mesma faixa de preço.
+
+**Decisão Adotada:**
+A API NestJS é totalmente agnóstica de provedor: a conexão é configurada via `ELASTICSEARCH_NODE`, `ELASTICSEARCH_USERNAME` e `ELASTICSEARCH_PASSWORD` (ou `ELASTICSEARCH_API_KEY`). Para produção inicial, adota-se **Elastic Cloud (plano inicial)** ou **VPS dedicada com Docker**, garantindo isolamento da memória do Elasticsearch em relação ao container da API.
 
 ### Imagem da API
 
