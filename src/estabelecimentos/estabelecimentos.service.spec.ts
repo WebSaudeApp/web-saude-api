@@ -553,5 +553,93 @@ describe('EstabelecimentosService', () => {
         'Serviço de busca por localização temporariamente indisponível.',
       );
     });
+
+    it('combina múltiplos filtros (termo, tipo, especialidade, cidade, estado e raio) na busca geográfica (BE-11)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-1' },
+            distanciaKm: 2.1,
+          },
+        ],
+        total: 1,
+        pagina: 1,
+        totalPaginas: 1,
+      });
+
+      findMany.mockResolvedValue([estabelecimento]);
+
+      const resultado = await service.search({
+        termo: 'São João',
+        tipo: 'HOSPITAL',
+        especialidade: 'Cardiologia',
+        cidade: 'Recife',
+        estado: 'PE',
+        lat: -8.0476,
+        lng: -34.877,
+        raioKm: 15,
+      } as BuscarEstabelecimentosDto);
+
+      expect(buscarEstabelecimentos).toHaveBeenCalledWith({
+        termo: 'São João',
+        tipo: 'HOSPITAL',
+        especialidade: 'Cardiologia',
+        cidade: 'Recife',
+        estado: 'PE',
+        localizacao: {
+          lat: -8.0476,
+          lon: -34.877,
+          raioKm: 15,
+        },
+        pagina: 1,
+        limite: 20,
+      });
+
+      expect(resultado.dados).toHaveLength(1);
+      expect(resultado.dados[0].id).toBe('estabelecimento-1');
+      expect((resultado.dados[0] as { distanciaKm?: number }).distanciaKm).toBe(
+        2.1,
+      );
+    });
+
+    it('tipo inexistente na busca geográfica devolve lista vazia, sem erro (RN05, BE-11)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [],
+        total: 0,
+        pagina: 1,
+        totalPaginas: 0,
+      });
+
+      const resultado = await service.search({
+        tipo: 'LABORATORIO',
+        lat: -8.05,
+        lng: -34.88,
+        raioKm: 10,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toEqual([]);
+      expect(resultado.paginacao.total).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('especialidade inexistente na busca geográfica devolve lista vazia, sem erro (RN06, BE-11)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [],
+        total: 0,
+        pagina: 1,
+        totalPaginas: 0,
+      });
+
+      const resultado = await service.search({
+        especialidade: 'Especialidade Inexistente',
+        lat: -8.05,
+        lng: -34.88,
+        raioKm: 10,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toEqual([]);
+      expect(resultado.paginacao.total).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
   });
 });

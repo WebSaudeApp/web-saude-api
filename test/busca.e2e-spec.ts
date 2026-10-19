@@ -219,6 +219,70 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     expect(itemEsperanca?.distanciaKm).toBeCloseTo(2.82, 1);
   });
 
+  describe('Filtros Combinados com Raio Geográfico (BE-11)', () => {
+    it('filtra por tipo combinado ao raio geográfico', async () => {
+      // No raio de 10 km há o Hospital Esperança e a Clínica Boa Viagem.
+      // Filtrando por tipo "HOSPITAL", a Clínica Boa Viagem deve ser excluída.
+      const busca = await buscaService.buscarEstabelecimentos({
+        tipo: 'HOSPITAL',
+        localizacao: {
+          lat: -8.0631,
+          lon: -34.8711,
+          raioKm: 10,
+        },
+      });
+
+      const ids = busca.itens.map((i) => i.estabelecimento.id);
+      expect(ids).toContain(docEsperanca.id);
+      expect(ids).not.toContain(docClinica.id);
+      expect(ids).not.toContain(docCaruaru.id);
+    });
+
+    it('filtra por especialidade combinada ao raio geográfico', async () => {
+      // No raio de 10 km, apenas a Clínica Boa Viagem possui a especialidade "Dermatologia".
+      const busca = await buscaService.buscarEstabelecimentos({
+        especialidade: 'Dermatologia',
+        localizacao: {
+          lat: -8.0631,
+          lon: -34.8711,
+          raioKm: 10,
+        },
+      });
+
+      const ids = busca.itens.map((i) => i.estabelecimento.id);
+      expect(ids).toContain(docClinica.id);
+      expect(ids).not.toContain(docEsperanca.id);
+    });
+
+    it('retorna lista vazia sem erro quando o tipo não existe no raio (RN05)', async () => {
+      const busca = await buscaService.buscarEstabelecimentos({
+        tipo: 'LABORATORIO',
+        localizacao: {
+          lat: -8.0631,
+          lon: -34.8711,
+          raioKm: 10,
+        },
+      });
+
+      expect(busca.itens).toEqual([]);
+      expect(busca.total).toBe(0);
+    });
+
+    it('retorna lista vazia sem erro quando a especialidade não existe no raio (RN06)', async () => {
+      const busca = await buscaService.buscarEstabelecimentos({
+        especialidade: 'Neurocirurgia Espacial',
+        localizacao: {
+          lat: -8.0631,
+          lon: -34.8711,
+          raioKm: 10,
+        },
+      });
+
+      expect(busca.itens).toEqual([]);
+      expect(busca.total).toBe(0);
+    });
+  });
+
   describe('Sincronização com o Banco de Dados (BE-15)', () => {
     it('cadastra/atualiza estabelecimento no índice e reflete nas buscas', async () => {
       const docNovo: DocumentoEstabelecimento = {

@@ -430,5 +430,133 @@ describe('BuscaService', () => {
         }),
       );
     });
+
+    it('confere a consulta montada com todos os filtros combinados e raio geográfico (BE-11)', async () => {
+      const elasticsearchMock = {
+        search: jest.fn().mockResolvedValue({
+          hits: {
+            total: { value: 1 },
+            hits: [
+              {
+                _source: documentoValido,
+                sort: [2.5, 'Hospital Esperança', 'est-1'],
+              },
+            ],
+          },
+        }),
+      };
+
+      const service = new BuscaService(
+        elasticsearchMock as unknown as ElasticsearchService,
+      );
+
+      await service.buscarEstabelecimentos({
+        termo: 'esperança',
+        tipo: 'hospital',
+        especialidade: 'Cardiologia',
+        cidade: 'Recife',
+        estado: 'pe',
+        localizacao: {
+          lat: -8.0476,
+          lon: -34.877,
+          raioKm: 15,
+        },
+        pagina: 1,
+        limite: 10,
+      });
+
+      expect(elasticsearchMock.search).toHaveBeenCalledTimes(1);
+      type SearchCall = {
+        index: string;
+        from: number;
+        size: number;
+        query: {
+          bool: {
+            must: Array<{
+              bool: {
+                should: Array<{
+                  multi_match?: { query: string; fields: string[] };
+                  nested?: { path: string };
+                }>;
+              };
+            }>;
+            filter: unknown[];
+          };
+        };
+        sort: Array<{
+          _geo_distance?: { unit: string };
+          [key: string]: unknown;
+        }>;
+      };
+      const chamada = (
+        elasticsearchMock.search.mock.calls[0] as [SearchCall]
+      )[0];
+
+      // 1. Índice e paginação
+      expect(chamada.index).toBe(ALIAS_ESTABELECIMENTOS);
+      expect(chamada.from).toBe(0);
+      expect(chamada.size).toBe(10);
+
+      // 2. Query bool
+      const queryBool = chamada.query.bool;
+      expect(queryBool).toBeDefined();
+
+      // Must: termo de busca com multi_match e nested especialidades
+      expect(queryBool.must).toHaveLength(1);
+      const mustClause = queryBool.must[0].bool.should;
+      expect(mustClause[0].multi_match?.query).toBe('esperança');
+      expect(mustClause[0].multi_match?.fields).toContain('nome^3');
+      expect(mustClause[1].nested?.path).toBe('especialidades');
+
+      // Filter: tipo, especialidade, cidade, estado, geo_distance
+      expect(queryBool.filter).toHaveLength(5);
+
+      // Tipo convertido para uppercase (HOSPITAL)
+      expect(queryBool.filter).toContainEqual({
+        term: { 'tipo.nome': 'HOSPITAL' },
+      });
+
+      // Especialidade (nested com id ou nome)
+      expect(queryBool.filter).toContainEqual({
+        nested: {
+          path: 'especialidades',
+          query: {
+            bool: {
+              should: [
+                { term: { 'especialidades.id': 'Cardiologia' } },
+                { match: { 'especialidades.nome': 'Cardiologia' } },
+              ],
+            },
+          },
+        },
+      });
+
+      // Cidade
+      expect(queryBool.filter).toContainEqual({
+        match: { 'endereco.cidade': 'Recife' },
+      });
+
+      // Estado convertido para uppercase (PE)
+      expect(queryBool.filter).toContainEqual({
+        term: { 'endereco.estado': 'PE' },
+      });
+
+      // Filtro geo_distance
+      expect(queryBool.filter).toContainEqual({
+        geo_distance: {
+          distance: '15km',
+          localizacao: {
+            lat: -8.0476,
+            lon: -34.877,
+          },
+        },
+      });
+
+      // Sort: geo_distance, nome.keyword e id
+      expect(chamada.sort[0]._geo_distance).toBeDefined();
+      expect(chamada.sort[0]._geo_distance.unit).toBe('km');
+      expect(chamada.sort[1]).toEqual({ 'nome.keyword': { order: 'asc' } });
+      expect(chamada.sort[2]).toEqual({ id: { order: 'asc' } });
+    });
   });
 });
