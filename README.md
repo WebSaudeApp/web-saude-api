@@ -111,7 +111,8 @@ Node.js recomendado: **22 LTS**.
 
 - Node.js 22+
 - npm 11+
-- Conta Supabase **ou** Docker (para PostgreSQL local)
+- Docker Desktop (para rodar Elasticsearch, Kibana e PostgreSQL local)
+- Conta Supabase (opcional, caso utilize banco PostgreSQL gerenciado em nuvem)
 - Git
 
 ---
@@ -130,7 +131,7 @@ cd web-saude-api
 cp .env.example .env
 ```
 
-Preencha `DATABASE_URL` e `DIRECT_URL` no `.env`.  
+Preencha `DATABASE_URL` e `DIRECT_URL` no `.env`. As variáveis do Elasticsearch já vêm pré-configuradas para o ambiente local (`http://localhost:9200`).  
 O arquivo `.env` **não deve ir para o Git**.
 
 ### 3. Instalar dependências
@@ -141,23 +142,42 @@ npm install
 
 O Prisma Client é gerado automaticamente no `postinstall`.
 
-### 4. Subir o banco (se for local)
+### 4. Subir os serviços com Docker (PostgreSQL, Elasticsearch e Kibana)
 
-Com Supabase, pule este passo. Com Docker:
+Para iniciar os serviços de infraestrutura local:
 
 ```bash
+# Subir o Elasticsearch e o Kibana (painel visual):
+docker compose up -d elasticsearch kibana
+
+# Se você não usa Supabase e prefere o PostgreSQL local em container:
 docker compose up -d postgres
 ```
 
-### 5. Iniciar a API
+- **Elasticsearch**: [http://localhost:9200](http://localhost:9200) (motor de busca textual e geo_distance)
+- **Kibana**: [http://localhost:5601](http://localhost:5601) (painel visual e console Dev Tools)
+
+### 5. Inicializar o índice e sincronizar os dados no Elasticsearch
+
+Com o container do Elasticsearch rodando, prepare o índice e sincronize os dados:
+
+```bash
+# 1. Cria o índice 'estabelecimentos_v1' com mapeamento geo_point e analisador asciifolding:
+npm run es:init
+
+# 2. Sincroniza todos os estabelecimentos do PostgreSQL para o Elasticsearch:
+npm run reindex
+```
+
+### 6. Iniciar a API
 
 ```bash
 npm run start:dev
 ```
 
-- API: [http://localhost:3000](http://localhost:3000)
-- Health: [http://localhost:3000/health](http://localhost:3000/health)
-- Documentação: [http://localhost:3000/docs](http://localhost:3000/docs)
+- **API**: [http://localhost:3000](http://localhost:3000)
+- **Health check**: [http://localhost:3000/health](http://localhost:3000/health)
+- **Swagger / Documentação**: [http://localhost:3000/docs](http://localhost:3000/docs)
 
 ---
 
@@ -179,6 +199,10 @@ Todas as variáveis abaixo são **obrigatórias**. A API não sobe se alguma est
 | `JWT_REFRESH_SECRET` | string longa (diferente) | Segredo do refresh token |
 | `JWT_ACCESS_EXPIRES` | `15m` | Validade do access token |
 | `JWT_REFRESH_EXPIRES` | `7d` | Validade do refresh token |
+| `ELASTICSEARCH_NODE` | `http://localhost:9200` | URL do cluster Elasticsearch (opcional, padrão `http://localhost:9200`) |
+| `ELASTICSEARCH_USERNAME` | `elastic` | Usuário para autenticação básica no Elasticsearch (opcional) |
+| `ELASTICSEARCH_PASSWORD` | `sua-senha` | Senha para autenticação básica no Elasticsearch (opcional) |
+| `ELASTICSEARCH_API_KEY` | `chave-api-base64` | Chave de API para Elastic Cloud (opcional) |
 
 ### Senha na connection string
 
@@ -309,27 +333,65 @@ Entre no portal em `/docs` com e-mail e senha. O token entra sozinho nas rotas a
 
 Favorito duplicado e avaliação duplicada retornam **409**. Gestor não avalia a própria unidade. A média `averageRating` é recalculada a cada avaliação. Encerrar a conta revoga sessões, remove favoritos, anonimiza nome/e-mail/telefone e faz soft delete das unidades do gestor.
 
-### Unidades e especialidades (FASE 3)
+### Estabelecimentos e busca geográfica (UC01 / Etapa 3)
 
-| Método | Rota | Auth |
-| --- | --- | --- |
-| `GET` | `/health-units` | pública (só `APPROVED` + `ACTIVE`) |
-| `GET` | `/health-units/mine` | JWT `FUNCTIONAL` |
-| `GET` | `/health-units/:id` | pública se publicada; dono/admin vê rascunho |
-| `POST` | `/health-units` | JWT `FUNCTIONAL` (cria `DRAFT` / `INACTIVE`) |
-| `PATCH` | `/health-units/:id` | JWT dono |
-| `DELETE` | `/health-units/:id` | JWT dono (soft delete) |
-| `PUT` | `/health-units/:id/specialties` | JWT dono |
-| `PUT` | `/health-units/:id/opening-hours` | JWT dono |
-| `POST` | `/health-units/:id/images` | JWT dono (multipart, JPG/PNG/WEBP, máx. 5MB, 10 por unidade) |
-| `PATCH` | `/health-units/:id/images/:imageId/main` | JWT dono |
-| `DELETE` | `/health-units/:id/images/:imageId` | JWT dono |
-| `GET` | `/specialties` | pública |
-| `POST` | `/specialties` | JWT `FUNCTIONAL` ou `ADMIN` |
+| Método | Rota | Auth | Descrição |
+| --- | --- | --- | --- |
+| `GET` | `/estabelecimentos` | pública | Busca de unidades por filtros e por proximidade geográfica (`geo_distance`) |
+| `GET` | `/estabelecimentos/tipos` | pública | Lista os tipos de estabelecimentos (`HOSPITAL`, `CLINICA`) |
+| `GET` | `/estabelecimentos/:id` | pública | Detalhes completos da unidade (endereço, horários, especialidades, fotos) |
+| `POST` | `/estabelecimentos` | JWT `FUNCTIONAL` | Cadastra novo estabelecimento com endereço |
+| `PATCH` | `/estabelecimentos/:id` | JWT dono | Edição parcial de dados da unidade |
+| `DELETE` | `/estabelecimentos/:id` | JWT dono | Exclusão lógica da unidade |
+| `PUT` | `/estabelecimentos/:id/especialidades` | JWT dono | Define especialidades atendidas |
+| `PUT` | `/estabelecimentos/:id/horarios` | JWT dono | Define horários de funcionamento |
+| `POST` | `/estabelecimentos/:id/midias` | JWT dono | Upload de imagens (JPG/PNG/WEBP até 5MB) |
+| `DELETE` | `/estabelecimentos/:id/midias/:midiaId` | JWT dono | Remove imagem |
+| `GET` | `/estabelecimentos/:id/reviews` | pública | Lista avaliações da unidade paginadas (`pagina`, `limite`) |
+| `POST` | `/estabelecimentos/:id/reviews` | JWT `PATIENT` | Cria uma avaliação com nota de 1 a 5 |
 
-Busca pública (`GET /health-units`) aceita `search`, `type`, `city`, `state`, `specialty`, `rating`, `sort` (`name` \| `createdAt` \| `rating`) e paginação `page` / `limit` (máx. 100). Resposta: `{ data, meta }`.
+#### Parâmetros de Busca Geográfica (`GET /estabelecimentos`):
+- `termo`: texto livre em nome, cidade, bairro e especialidade (ignora acentos via `asciifolding`).
+- `tipo`: tipo da unidade (`HOSPITAL` ou `CLINICA`).
+- `especialidade`: ID ou nome da especialidade.
+- `cidade` e `estado`: filtros textuais exatos ou parciais.
+- `lat` e `lng`: coordenadas de geolocalização do usuário (ex: `-5.09194`, `-42.80336`).
+- `raioKm`: raio de alcance em quilômetros (padrão `10`, máximo `50`).
+- `pagina` e `limite`: controle de paginação (padrão `1` e `20`).
 
-Detalhes das alterações da pesquisa de estabelecimentos (UC01): [docs/casos-de-uso/UC01-pesquisar-estabelecimentos.md](docs/casos-de-uso/UC01-pesquisar-estabelecimentos.md).
+**Formato da resposta:**
+```json
+{
+  "dados": [
+    {
+      "id": "uuid-da-unidade",
+      "nome": "Hospital Regional Justino Luz",
+      "tipo": { "id": "uuid", "nome": "HOSPITAL" },
+      "endereco": {
+        "cidade": "Picos",
+        "estado": "PI",
+        "latitude": -7.07897,
+        "longitude": -41.46825
+      },
+      "distanciaKm": 1.2,
+      "notaMedia": 4.5,
+      "totalReviews": 12
+    }
+  ],
+  "paginacao": {
+    "pagina": 1,
+    "limite": 20,
+    "total": 45,
+    "totalPaginas": 3,
+    "temMais": true
+  }
+}
+```
+
+> **Scroll Infinito**: O campo `temMais` (`pagina < totalPaginas`) informa diretamente ao front-end se há novas páginas para carregar.  
+> **Resiliência / Fallback**: Se o Elasticsearch estiver indisponível ou offline, a API faz fallback transparente para a busca relacional no PostgreSQL.
+
+Detalhes da especificação completa: [docs/casos-de-uso/UC01-pesquisar-estabelecimentos.md](docs/casos-de-uso/UC01-pesquisar-estabelecimentos.md).
 
 Imagens ficam em `uploads/health-units/` e são servidas em `/uploads/health-units/...`.
 
@@ -479,9 +541,11 @@ Cada request autenticado ou público gera uma linha `METHOD /path status duraç�
 | `npm test` | Testes unitários |
 | `npm run test:watch` | Unitários em watch |
 | `npm run test:cov` | Coverage |
-| `npm run test:e2e` | Testes E2E |
+| `npm run test:e2e` | Testes E2E (incluindo testes com Elasticsearch) |
 | `npm run prisma:generate` | Gera o Prisma Client |
 | `npm run backup` | Dump lógico via `pg_dump` (`scripts/backup.ps1`) |
+| `npm run es:init` | Cria o índice `estabelecimentos_v1` com analisador `asciifolding`, mapeamento `geo_point` e alias |
+| `npm run reindex` | Reindexa todos os estabelecimentos do PostgreSQL para o Elasticsearch |
 
 ---
 
@@ -525,6 +589,32 @@ Deploy na Render continua por `autoDeploy` no `render.yaml`. A imagem Docker apl
 
 ## Docker
 
+### Subir todos os serviços locais (PostgreSQL, Elasticsearch e Kibana)
+
+Você pode subir toda a infraestrutura local com um único comando:
+
+```bash
+# Sobe todos os containers em background:
+docker compose up -d
+
+# Verificar se todos os containers estão saudáveis (healthy/up):
+docker compose ps
+
+# Acompanhar logs de todos os serviços:
+docker compose logs -f
+
+# Parar todos os serviços:
+docker compose down
+```
+
+Serviços disponíveis:
+- **API NestJS**: [http://localhost:3000](http://localhost:3000)
+- **Elasticsearch 8**: [http://localhost:9200](http://localhost:9200)
+- **Kibana (UI visual)**: [http://localhost:5601](http://localhost:5601)
+- **PostgreSQL 16**: `localhost:5432`
+
+---
+
 ### PostgreSQL local
 
 ```bash
@@ -538,7 +628,7 @@ Credenciais locais padrão: usuário `postgres`, senha `postgres`, banco `websau
 
 Redis está **comentado** no `docker-compose.yml`, reservado para cache/filas (BullMQ) em fase futura. Não subir Redis só por subir.
 
-### Elasticsearch local
+### Elasticsearch local e Kibana
 
 O Elasticsearch é utilizado para a busca textual tolerante a variações e acentos (`asciifolding`) e busca geográfica por proximidade (`geo_distance` / `geo_point`).
 
