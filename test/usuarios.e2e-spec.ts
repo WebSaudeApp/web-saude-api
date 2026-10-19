@@ -109,6 +109,8 @@ describe('Usuários (e2e)', () => {
           numero: '20',
           cidade: 'Olinda',
           estado: 'PE',
+          latitude: -8.0089,
+          longitude: -34.8553,
         },
       })
       .expect(200);

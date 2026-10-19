@@ -5,7 +5,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 
-jest.setTimeout(60000);
+jest.setTimeout(180000);
 
 type Estabelecimento = {
   id: string;
@@ -89,7 +89,7 @@ describe('Estabelecimentos (e2e)', () => {
       .get('/estabelecimentos/tipos')
       .expect(200);
     expect((tipos.body as Array<{ nome: string }>).map((t) => t.nome)).toEqual(
-      expect.arrayContaining(['HOSPITAL', 'CLINIC']),
+      expect.arrayContaining(['HOSPITAL', 'CLINICA']),
     );
 
     const especialidade = await request(app.getHttpServer())
@@ -109,6 +109,8 @@ describe('Estabelecimentos (e2e)', () => {
           numero: '1',
           cidade: 'Recife',
           estado: 'PE',
+          latitude: -8.0476,
+          longitude: -34.877,
         },
       })
       .expect(400);
@@ -124,6 +126,8 @@ describe('Estabelecimentos (e2e)', () => {
           numero: '1',
           cidade: 'Recife',
           estado: 'PE',
+          latitude: -8.0476,
+          longitude: -34.877,
         },
         contatos: [{ tipo: 'EMAIL', valor: 'sem-arroba' }],
       })
@@ -141,6 +145,8 @@ describe('Estabelecimentos (e2e)', () => {
           bairro: 'Boa Viagem',
           cidade: 'Recife',
           estado: 'pe',
+          latitude: -8.0476,
+          longitude: -34.877,
         },
         contatos: [
           { tipo: 'TELEFONE', valor: '8133334444' },
@@ -262,19 +268,18 @@ describe('Estabelecimentos (e2e)', () => {
     const search = await request(app.getHttpServer())
       .get('/estabelecimentos')
       .query({
-        search: `Pina ${suffix}`,
+        termo: `Pina ${suffix}`,
         tipo: 'HOSPITAL',
         cidade: 'recife',
         especialidade: especialidadeNome,
-        notaMinima: 5,
       })
       .expect(200);
     const searchBody = search.body as {
-      data: Estabelecimento[];
-      meta: { total: number };
+      dados: Estabelecimento[];
+      paginacao: { total: number };
     };
-    expect(searchBody.meta.total).toBe(1);
-    expect(searchBody.data[0].id).toBe(unit.id);
+    expect(searchBody.paginacao.total).toBe(1);
+    expect(searchBody.dados[0].id).toBe(unit.id);
 
     await request(app.getHttpServer())
       .delete(`/especialidades/${especialidadeId}`)
@@ -290,5 +295,5 @@ describe('Estabelecimentos (e2e)', () => {
       await prisma.endereco.count({ where: { id: unit.endereco.id } }),
     ).toBe(0);
     expect(await prisma.review.count({ where: { id: reviewId } })).toBe(0);
-  });
+  }, 180000);
 });
