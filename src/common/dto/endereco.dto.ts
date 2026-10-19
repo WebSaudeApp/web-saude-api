@@ -53,18 +53,36 @@ export class EnderecoDto {
   @MaxLength(2)
   estado!: string;
 
-  @ApiProperty({ example: -8.0476 })
+  @ApiProperty({
+    example: -8.0476,
+    description: 'Latitude no território brasileiro (entre -34 e 6)',
+  })
   @Type(() => Number)
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
+  @IsNumber({}, { message: 'Latitude deve ser um número válido' })
+  @Min(-34, {
+    message:
+      'Latitude deve estar dentro do território brasileiro (entre -34 e 6)',
+  })
+  @Max(6, {
+    message:
+      'Latitude deve estar dentro do território brasileiro (entre -34 e 6)',
+  })
   latitude!: number;
 
-  @ApiProperty({ example: -34.877 })
+  @ApiProperty({
+    example: -34.877,
+    description: 'Longitude no território brasileiro (entre -74 e -28)',
+  })
   @Type(() => Number)
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
+  @IsNumber({}, { message: 'Longitude deve ser um número válido' })
+  @Min(-74, {
+    message:
+      'Longitude deve estar dentro do território brasileiro (entre -74 e -28)',
+  })
+  @Max(-28, {
+    message:
+      'Longitude deve estar dentro do território brasileiro (entre -74 e -28)',
+  })
   longitude!: number;
 }
 
