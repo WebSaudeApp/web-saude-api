@@ -136,6 +136,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     // Busca por "clinica" (sem acento) deve encontrar "Clínica de Saúde Boa Viagem"
     const resultadoClinica = await buscaService.buscarEstabelecimentos({
       termo: 'clinica',
+      limite: 100,
     });
 
     const nomesClinica = resultadoClinica.itens.map(
@@ -146,6 +147,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     // Busca por "saude" (sem acento) deve encontrar a clínica
     const resultadoSaude = await buscaService.buscarEstabelecimentos({
       termo: 'saude',
+      limite: 100,
     });
     const nomesSaude = resultadoSaude.itens.map(
       (item) => item.estabelecimento.nome,

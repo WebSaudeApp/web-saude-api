@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { EspecialidadesService } from '../especialidades/especialidades.service';
@@ -42,9 +42,11 @@ describe('EstabelecimentosService', () => {
       refresh: jest.fn<() => Promise<void>>(() => Promise.resolve()),
     },
   }));
+  const buscarEstabelecimentos = jest.fn();
   const buscaService = {
     indexarEstabelecimento,
     removerEstabelecimento,
+    buscarEstabelecimentos,
     obterCliente,
   } as unknown as BuscaService;
   const service = new EstabelecimentosService(
@@ -437,6 +439,119 @@ describe('EstabelecimentosService', () => {
       expect(resultado.erros).toBe(1);
       expect(resultado.falhas).toHaveLength(1);
       expect(resultado.falhas[0].id).toBe('estabelecimento-2');
+    });
+  });
+
+  describe('search por proximidade geográfica (BE-09)', () => {
+    const estabelecimento2 = {
+      ...estabelecimento,
+      id: 'estabelecimento-2',
+      nome: 'Clínica Boa Vista',
+    };
+
+    beforeEach(() => {
+      buscarEstabelecimentos.mockReset();
+      findMany.mockReset();
+    });
+
+    it('busca por proximidade geográfica retornando lista ordenada com distanciaKm arredondada', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-1' },
+            distanciaKm: 1.234,
+          },
+          {
+            estabelecimento: { id: 'estabelecimento-2' },
+            distanciaKm: 5.678,
+          },
+        ],
+        total: 2,
+        pagina: 1,
+        totalPaginas: 1,
+      });
+
+      findMany.mockResolvedValue([estabelecimento2, estabelecimento]);
+
+      const resultado = await service.search({
+        lat: -8.05389,
+        lng: -34.88111,
+        raioKm: 10,
+      } as BuscarEstabelecimentosDto);
+
+      expect(buscarEstabelecimentos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          localizacao: {
+            lat: -8.05389,
+            lon: -34.88111,
+            raioKm: 10,
+          },
+        }),
+      );
+
+      // Confere ordem exata do Elasticsearch e distanciaKm com 1 casa decimal
+      expect(resultado.dados).toHaveLength(2);
+      expect(resultado.dados[0].id).toBe('estabelecimento-1');
+      expect(
+        (resultado.dados[0] as unknown as { distanciaKm: number }).distanciaKm,
+      ).toBe(1.2);
+      expect(resultado.dados[1].id).toBe('estabelecimento-2');
+      expect(
+        (resultado.dados[1] as unknown as { distanciaKm: number }).distanciaKm,
+      ).toBe(5.7);
+      expect(resultado.paginacao.total).toBe(2);
+    });
+
+    it('retorna lista vazia quando nenhum estabelecimento está no raio', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [],
+        total: 0,
+        pagina: 1,
+        totalPaginas: 0,
+      });
+
+      const resultado = await service.search({
+        lat: -8.05,
+        lng: -34.88,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toEqual([]);
+      expect(resultado.paginacao.total).toBe(0);
+      expect(resultado.paginacao.totalPaginas).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejeita lat sem lng com erro 400', async () => {
+      await expect(
+        service.search({ lat: -8.05 } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita lng sem lat com erro 400', async () => {
+      await expect(
+        service.search({ lng: -34.88 } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita raioKm sem coordenadas com erro 400', async () => {
+      await expect(
+        service.search({ raioKm: 15 } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('lança erro 503 quando o Elasticsearch falha na busca geográfica', async () => {
+      buscarEstabelecimentos.mockRejectedValue(
+        new Error('Elasticsearch indisponível'),
+      );
+
+      await expect(
+        service.search({
+          lat: -8.05,
+          lng: -34.88,
+        } as BuscarEstabelecimentosDto),
+      ).rejects.toThrow(
+        'Serviço de busca por localização temporariamente indisponível.',
+      );
     });
   });
 });

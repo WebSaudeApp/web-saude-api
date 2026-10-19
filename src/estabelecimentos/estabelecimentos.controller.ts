@@ -35,7 +35,11 @@ export class EstabelecimentosController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Busca estabelecimentos com filtros e paginação' })
+  @ApiOperation({
+    summary: 'Busca estabelecimentos com filtros e proximidade geográfica',
+    description:
+      'Pesquisa estabelecimentos por filtros (termo, tipo, especialidade, cidade, estado) e por proximidade geográfica informando latitude (lat), longitude (lng) e raio opcional em km (raioKm).',
+  })
   search(@Query() query: BuscarEstabelecimentosDto) {
     return this.estabelecimentosService.search(query);
   }

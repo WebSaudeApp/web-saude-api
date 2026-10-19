@@ -297,6 +297,11 @@ export class BuscaService implements OnModuleInit {
           distance_type: 'arc',
         },
       });
+      sort.push({ 'nome.keyword': { order: 'asc' } });
+      sort.push({ id: { order: 'asc' } });
+    } else {
+      sort.push({ 'nome.keyword': { order: 'asc' } });
+      sort.push({ id: { order: 'asc' } });
     }
 
     const query: Record<string, unknown> = {};

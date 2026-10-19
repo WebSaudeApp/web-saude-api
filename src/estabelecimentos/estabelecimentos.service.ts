@@ -3,11 +3,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, TipoMidia } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { normalizeContatos } from '../common/contatos.util';
 import { paginada } from '../common/dto/paginacao-query.dto';
+import { validarRegrasGeograficas } from './dto/parse-buscar-estabelecimentos-query';
 import {
   toEnderecoCreate,
   toEnderecoResponse,
@@ -87,8 +89,23 @@ export class EstabelecimentosService {
   }
 
   async search(query: BuscarEstabelecimentosDto) {
+    const errosGeograficos = validarRegrasGeograficas(query);
+    if (errosGeograficos.length > 0) {
+      throw new BadRequestException({
+        status: 400,
+        mensagem: 'Parâmetros inválidos.',
+        erros: errosGeograficos,
+      });
+    }
+
     const pagina = query.pagina ?? 1;
     const limite = query.limite ?? 20;
+
+    // Busca por proximidade geográfica usando o Elasticsearch quando lat e lng forem informados
+    if (query.lat !== undefined && query.lng !== undefined) {
+      return this.buscarPorProximidade(query, pagina, limite);
+    }
+
     const where: Prisma.EstabelecimentoWhereInput = {};
 
     if (query.tipo) {
@@ -134,6 +151,67 @@ export class EstabelecimentosService {
       pagina,
       limite,
     );
+  }
+
+  private async buscarPorProximidade(
+    query: BuscarEstabelecimentosDto,
+    pagina: number,
+    limite: number,
+  ) {
+    try {
+      const resultado = await this.buscaService.buscarEstabelecimentos({
+        termo: query.termo,
+        tipo: query.tipo,
+        especialidade: query.especialidade,
+        cidade: query.cidade,
+        estado: query.estado,
+        localizacao: {
+          lat: query.lat!,
+          lon: query.lng!,
+          raioKm: query.raioKm ?? 10,
+        },
+        pagina,
+        limite,
+      });
+
+      const ids = resultado.itens.map((item) => item.estabelecimento.id);
+      if (ids.length === 0) {
+        return paginada([], resultado.total, pagina, limite);
+      }
+
+      // Os dados completos continuam vindo do PostgreSQL (RN11)
+      const estabelecimentos = await this.prisma.estabelecimento.findMany({
+        where: { id: { in: ids } },
+        include: estabelecimentoInclude,
+      });
+
+      const mapa = new Map(estabelecimentos.map((item) => [item.id, item]));
+
+      // Preserva rigorosamente a ordem de proximidade retornada pelo Elasticsearch
+      const dados = resultado.itens
+        .map((item) => {
+          const estabelecimento = mapa.get(item.estabelecimento.id);
+          if (!estabelecimento) return null;
+          const distanciaKm =
+            item.distanciaKm !== undefined
+              ? Math.round(item.distanciaKm * 10) / 10
+              : undefined;
+          return this.toBuscaResponse(estabelecimento, distanciaKm);
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
+
+      return paginada(dados, resultado.total, pagina, limite);
+    } catch (erro) {
+      if (erro instanceof BadRequestException) {
+        throw erro;
+      }
+      this.logger.error(
+        `Falha ao realizar busca por proximidade no Elasticsearch: ${String(erro)}`,
+      );
+      throw new ServiceUnavailableException(
+        'Serviço de busca por localização temporariamente indisponível.',
+      );
+    }
   }
 
   private async filtrarTexto(filtros: {
@@ -478,7 +556,7 @@ export class EstabelecimentosService {
     };
   }
 
-  private toBuscaResponse(item: EstabelecimentoCompleto) {
+  private toBuscaResponse(item: EstabelecimentoCompleto, distanciaKm?: number) {
     return {
       id: item.id,
       nome: item.nome,
@@ -500,6 +578,7 @@ export class EstabelecimentosService {
         atende24h: horario.atende24h,
       })),
       midias: item.midias,
+      ...(distanciaKm !== undefined ? { distanciaKm } : {}),
     };
   }
 }
