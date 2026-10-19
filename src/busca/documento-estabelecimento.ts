@@ -24,7 +24,7 @@ export interface DocumentoEstabelecimento {
     id: string;
     nome: string;
   }>;
-  horarios: Array<{
+  horarios?: Array<{
     diaSemana: string;
     horaAbertura: string;
     horaFechamento: string;
@@ -32,6 +32,34 @@ export interface DocumentoEstabelecimento {
   }>;
   notaMedia?: number;
   totalReviews?: number;
+}
+
+export interface ParametrosBuscaEstabelecimentos {
+  termo?: string;
+  tipo?: string;
+  especialidade?: string;
+  cidade?: string;
+  estado?: string;
+  localizacao?: {
+    lat: number;
+    lon: number;
+    raioKm: number;
+  };
+  pagina?: number;
+  limite?: number;
+}
+
+export interface ItemResultadoBusca {
+  estabelecimento: DocumentoEstabelecimento;
+  distanciaKm?: number;
+  score?: number | null;
+}
+
+export interface ResultadoBuscaEstabelecimentos {
+  itens: ItemResultadoBusca[];
+  total: number;
+  pagina: number;
+  totalPaginas: number;
 }
 
 export function coordenadasSaoValidas(lat: unknown, lon: unknown): boolean {

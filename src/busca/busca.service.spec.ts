@@ -321,4 +321,114 @@ describe('BuscaService', () => {
       ).resolves.toBeUndefined();
     });
   });
+
+  describe('buscarEstabelecimentos', () => {
+    it('executa busca com filtros textuais e retorna itens formatados', async () => {
+      const elasticsearchMock = {
+        search: jest.fn().mockResolvedValue({
+          hits: {
+            total: { value: 1 },
+            hits: [
+              {
+                _source: documentoValido,
+                _score: 2.5,
+              },
+            ],
+          },
+        }),
+      };
+
+      const service = new BuscaService(
+        elasticsearchMock as unknown as ElasticsearchService,
+      );
+
+      const resultado = await service.buscarEstabelecimentos({
+        termo: 'clinica',
+        tipo: 'HOSPITAL',
+        cidade: 'Recife',
+        estado: 'PE',
+        especialidade: 'Cardiologia',
+      });
+
+      expect(resultado.total).toBe(1);
+      expect(resultado.itens.length).toBe(1);
+      expect(resultado.itens[0].estabelecimento).toEqual(documentoValido);
+      expect(resultado.itens[0].score).toBe(2.5);
+      expect(elasticsearchMock.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: ALIAS_ESTABELECIMENTOS,
+          from: 0,
+          size: 20,
+        }),
+      );
+    });
+
+    it('aplica geo_distance e sort por proximidade quando localizacao for fornecida', async () => {
+      const elasticsearchMock = {
+        search: jest.fn().mockResolvedValue({
+          hits: {
+            total: { value: 1 },
+            hits: [
+              {
+                _source: documentoValido,
+                _score: null,
+                sort: [3.456],
+              },
+            ],
+          },
+        }),
+      };
+
+      const service = new BuscaService(
+        elasticsearchMock as unknown as ElasticsearchService,
+      );
+
+      const resultado = await service.buscarEstabelecimentos({
+        localizacao: {
+          lat: -8.0631,
+          lon: -34.8711,
+          raioKm: 5,
+        },
+      });
+
+      expect(resultado.total).toBe(1);
+      expect(resultado.itens[0].distanciaKm).toBe(3.46);
+      expect(elasticsearchMock.search).toHaveBeenCalledTimes(1);
+      const chamada = elasticsearchMock.search.mock.calls[0] as [
+        { sort?: Array<{ _geo_distance?: { unit?: string; order?: string } }> },
+      ];
+      expect(chamada[0].sort?.[0]._geo_distance?.unit).toBe('km');
+      expect(chamada[0].sort?.[0]._geo_distance?.order).toBe('asc');
+    });
+
+    it('calcula paginação corretamente', async () => {
+      const elasticsearchMock = {
+        search: jest.fn().mockResolvedValue({
+          hits: {
+            total: { value: 45 },
+            hits: [],
+          },
+        }),
+      };
+
+      const service = new BuscaService(
+        elasticsearchMock as unknown as ElasticsearchService,
+      );
+
+      const resultado = await service.buscarEstabelecimentos({
+        pagina: 3,
+        limite: 10,
+      });
+
+      expect(resultado.total).toBe(45);
+      expect(resultado.pagina).toBe(3);
+      expect(resultado.totalPaginas).toBe(5);
+      expect(elasticsearchMock.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: 20,
+          size: 10,
+        }),
+      );
+    });
+  });
 });

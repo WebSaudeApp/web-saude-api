@@ -13,6 +13,9 @@ import {
 import {
   coordenadasSaoValidas,
   DocumentoEstabelecimento,
+  ItemResultadoBusca,
+  ParametrosBuscaEstabelecimentos,
+  ResultadoBuscaEstabelecimentos,
 } from './documento-estabelecimento';
 
 @Injectable()
@@ -33,7 +36,7 @@ export class BuscaService implements OnModuleInit {
       }
     } catch (erro) {
       this.logger.warn(
-        `Não foi possível inicializar o índice na inicialização: ${erro}`,
+        `Não foi possível inicializar o índice na inicialização: ${String(erro)}`,
       );
     }
   }
@@ -43,7 +46,9 @@ export class BuscaService implements OnModuleInit {
       const resposta = await this.elasticsearchService.ping();
       return !!resposta;
     } catch (erro) {
-      this.logger.warn(`Falha na checagem de saúde do Elasticsearch: ${erro}`);
+      this.logger.warn(
+        `Falha na checagem de saúde do Elasticsearch: ${String(erro)}`,
+      );
       return false;
     }
   }
@@ -117,7 +122,7 @@ export class BuscaService implements OnModuleInit {
       });
     } catch (erro) {
       this.logger.error(
-        `Erro ao indexar estabelecimento ${documento.id} no Elasticsearch: ${erro}`,
+        `Erro ao indexar estabelecimento ${documento.id} no Elasticsearch: ${String(erro)}`,
       );
       throw erro;
     }
@@ -159,6 +164,194 @@ export class BuscaService implements OnModuleInit {
       }
       this.logger.error(
         `Erro ao remover estabelecimento ${id} do Elasticsearch: ${String(erro)}`,
+      );
+      throw erro;
+    }
+  }
+
+  async buscarEstabelecimentos(
+    parametros: ParametrosBuscaEstabelecimentos = {},
+  ): Promise<ResultadoBuscaEstabelecimentos> {
+    const {
+      termo,
+      tipo,
+      especialidade,
+      cidade,
+      estado,
+      localizacao,
+      pagina = 1,
+      limite = 20,
+    } = parametros;
+
+    const from = Math.max(0, (pagina - 1) * limite);
+    const size = Math.max(1, limite);
+
+    const must: Record<string, unknown>[] = [];
+    const filter: Record<string, unknown>[] = [];
+    const sort: Record<string, unknown>[] = [];
+
+    // 1. Busca textual por termo (nome, cidade, bairro, logradouro e especialidades)
+    if (termo && termo.trim()) {
+      const termoLimpo = termo.trim();
+      must.push({
+        bool: {
+          should: [
+            {
+              multi_match: {
+                query: termoLimpo,
+                fields: [
+                  'nome^3',
+                  'endereco.cidade^2',
+                  'endereco.bairro^2',
+                  'endereco.logradouro',
+                ],
+                fuzziness: 'AUTO',
+              },
+            },
+            {
+              nested: {
+                path: 'especialidades',
+                query: {
+                  match: {
+                    'especialidades.nome': termoLimpo,
+                  },
+                },
+              },
+            },
+          ],
+          minimum_should_match: 1,
+        },
+      });
+    }
+
+    // 2. Filtro por tipo de estabelecimento
+    if (tipo && tipo.trim()) {
+      filter.push({
+        term: {
+          'tipo.nome': tipo.trim().toUpperCase(),
+        },
+      });
+    }
+
+    // 3. Filtro por especialidade (id ou nome)
+    if (especialidade && especialidade.trim()) {
+      const espLimpa = especialidade.trim();
+      filter.push({
+        nested: {
+          path: 'especialidades',
+          query: {
+            bool: {
+              should: [
+                { term: { 'especialidades.id': espLimpa } },
+                { match: { 'especialidades.nome': espLimpa } },
+              ],
+            },
+          },
+        },
+      });
+    }
+
+    // 4. Filtro por cidade
+    if (cidade && cidade.trim()) {
+      filter.push({
+        match: {
+          'endereco.cidade': cidade.trim(),
+        },
+      });
+    }
+
+    // 5. Filtro por UF/estado
+    if (estado && estado.trim()) {
+      filter.push({
+        term: {
+          'endereco.estado': estado.trim().toUpperCase(),
+        },
+      });
+    }
+
+    // 6. Filtro geográfico geo_distance e ordenação por proximidade
+    if (
+      localizacao &&
+      coordenadasSaoValidas(localizacao.lat, localizacao.lon)
+    ) {
+      const raioKm = localizacao.raioKm > 0 ? localizacao.raioKm : 10;
+      filter.push({
+        geo_distance: {
+          distance: `${raioKm}km`,
+          localizacao: {
+            lat: localizacao.lat,
+            lon: localizacao.lon,
+          },
+        },
+      });
+
+      sort.push({
+        _geo_distance: {
+          localizacao: {
+            lat: localizacao.lat,
+            lon: localizacao.lon,
+          },
+          order: 'asc',
+          unit: 'km',
+          mode: 'min',
+          distance_type: 'arc',
+        },
+      });
+    }
+
+    const query: Record<string, unknown> = {};
+    if (must.length > 0 || filter.length > 0) {
+      query.bool = {
+        ...(must.length > 0 ? { must } : { must: [{ match_all: {} }] }),
+        ...(filter.length > 0 ? { filter } : {}),
+      };
+    } else {
+      query.match_all = {};
+    }
+
+    try {
+      const resposta =
+        await this.elasticsearchService.search<DocumentoEstabelecimento>({
+          index: ALIAS_ESTABELECIMENTOS,
+          query,
+          from,
+          size,
+          ...(sort.length > 0 ? { sort } : {}),
+        });
+
+      const totalHits =
+        typeof resposta.hits.total === 'number'
+          ? resposta.hits.total
+          : (resposta.hits.total?.value ?? 0);
+
+      const itens: ItemResultadoBusca[] = (resposta.hits.hits ?? []).map(
+        (hit) => {
+          let distanciaKm: number | undefined;
+          if (
+            hit.sort &&
+            Array.isArray(hit.sort) &&
+            typeof hit.sort[0] === 'number'
+          ) {
+            distanciaKm = Math.round(hit.sort[0] * 100) / 100;
+          }
+
+          return {
+            estabelecimento: hit._source as DocumentoEstabelecimento,
+            distanciaKm,
+            score: hit._score,
+          };
+        },
+      );
+
+      return {
+        itens,
+        total: totalHits,
+        pagina,
+        totalPaginas: Math.ceil(totalHits / size),
+      };
+    } catch (erro) {
+      this.logger.error(
+        `Erro ao buscar estabelecimentos no Elasticsearch: ${String(erro)}`,
       );
       throw erro;
     }
