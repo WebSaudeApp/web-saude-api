@@ -554,7 +554,7 @@ describe('BuscaService', () => {
 
       // Sort: geo_distance, nome.keyword e id
       expect(chamada.sort[0]._geo_distance).toBeDefined();
-      expect(chamada.sort[0]._geo_distance.unit).toBe('km');
+      expect(chamada.sort[0]._geo_distance?.unit).toBe('km');
       expect(chamada.sort[1]).toEqual({ 'nome.keyword': { order: 'asc' } });
       expect(chamada.sort[2]).toEqual({ id: { order: 'asc' } });
     });

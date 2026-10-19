@@ -42,7 +42,24 @@ describe('EstabelecimentosService', () => {
       refresh: jest.fn<() => Promise<void>>(() => Promise.resolve()),
     },
   }));
-  const buscarEstabelecimentos = jest.fn();
+  const buscarEstabelecimentos = jest.fn<
+    (params?: unknown) => Promise<{
+      itens: Array<{
+        estabelecimento: { id: string; [key: string]: unknown };
+        distanciaKm?: number;
+      }>;
+      total: number;
+      pagina: number;
+      totalPaginas: number;
+    }>
+  >(() =>
+    Promise.resolve({
+      itens: [],
+      total: 0,
+      pagina: 1,
+      totalPaginas: 0,
+    }),
+  );
   const buscaService = {
     indexarEstabelecimento,
     removerEstabelecimento,
@@ -121,6 +138,7 @@ describe('EstabelecimentosService', () => {
       limite: 20,
       total: 21,
       totalPaginas: 2,
+      temMais: true,
     });
     expect(result.dados[0]).not.toHaveProperty('notaMedia');
     expect(queryRaw).not.toHaveBeenCalled();
@@ -164,6 +182,7 @@ describe('EstabelecimentosService', () => {
       limite: 5,
       total: 1,
       totalPaginas: 1,
+      temMais: false,
     });
   });
 
@@ -179,6 +198,7 @@ describe('EstabelecimentosService', () => {
         limite: 10,
         total: 0,
         totalPaginas: 0,
+        temMais: false,
       },
     });
   });
@@ -197,6 +217,7 @@ describe('EstabelecimentosService', () => {
       limite: 10,
       total: 15,
       totalPaginas: 2,
+      temMais: false,
     });
   });
 
@@ -282,6 +303,7 @@ describe('EstabelecimentosService', () => {
         limite: 20,
         total: 0,
         totalPaginas: 0,
+        temMais: false,
       },
     });
   });
@@ -305,6 +327,7 @@ describe('EstabelecimentosService', () => {
         limite: 20,
         total: 0,
         totalPaginas: 0,
+        temMais: false,
       },
     });
   });
@@ -356,6 +379,7 @@ describe('EstabelecimentosService', () => {
       limite: 10,
       total: 23,
       totalPaginas: 3,
+      temMais: false,
     });
   });
 
@@ -640,6 +664,80 @@ describe('EstabelecimentosService', () => {
       expect(resultado.dados).toEqual([]);
       expect(resultado.paginacao.total).toBe(0);
       expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('paginação para scroll infinito informa temMais e mantém ordem estável (BE-13)', async () => {
+      // Página 1 de 2
+      buscarEstabelecimentos.mockResolvedValueOnce({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-1' },
+            distanciaKm: 1.2,
+          },
+        ],
+        total: 2,
+        pagina: 1,
+        totalPaginas: 2,
+      });
+
+      findMany.mockResolvedValueOnce([estabelecimento]);
+
+      const pagina1 = await service.search({
+        lat: -8.05389,
+        lng: -34.88111,
+        limite: 1,
+        pagina: 1,
+      });
+
+      expect(pagina1.dados).toHaveLength(1);
+      expect(pagina1.dados[0].id).toBe('estabelecimento-1');
+      expect(pagina1.paginacao.temMais).toBe(true);
+      expect(pagina1.paginacao.pagina).toBe(1);
+      expect(pagina1.paginacao.totalPaginas).toBe(2);
+
+      // Página 2 de 2 (última página)
+      buscarEstabelecimentos.mockResolvedValueOnce({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-2' },
+            distanciaKm: 3.5,
+          },
+        ],
+        total: 2,
+        pagina: 2,
+        totalPaginas: 2,
+      });
+
+      findMany.mockResolvedValueOnce([
+        { ...estabelecimento, id: 'estabelecimento-2', nome: 'Clínica 2' },
+      ]);
+
+      const pagina2 = await service.search({
+        lat: -8.05389,
+        lng: -34.88111,
+        limite: 1,
+        pagina: 2,
+      });
+
+      expect(pagina2.dados).toHaveLength(1);
+      expect(pagina2.dados[0].id).toBe('estabelecimento-2');
+      expect(pagina2.paginacao.temMais).toBe(false);
+      expect(pagina2.paginacao.pagina).toBe(2);
+    });
+
+    it('sem coordenadas, a busca funciona pelo banco sem campo distanciaKm (BE-14)', async () => {
+      count.mockResolvedValueOnce(1);
+      findMany.mockResolvedValueOnce([estabelecimento]);
+
+      const resultado = await service.search({
+        termo: 'São João',
+      } as BuscarEstabelecimentosDto);
+
+      expect(buscarEstabelecimentos).not.toHaveBeenCalled();
+      expect(resultado.dados).toHaveLength(1);
+      expect(resultado.dados[0]).not.toHaveProperty('distanciaKm');
+      expect(resultado.paginacao.total).toBe(1);
+      expect(resultado.paginacao.temMais).toBe(false);
     });
   });
 });

@@ -89,6 +89,7 @@ describe('ReviewsService', () => {
       limite: 10,
       total: 45,
       totalPaginas: 5,
+      temMais: true,
     });
   });
 
