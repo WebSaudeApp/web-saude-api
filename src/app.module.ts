@@ -7,12 +7,13 @@ import { RequestLoggingInterceptor } from './common/http/request-logging.interce
 import { CommonModule } from './common/common.module';
 import { validate } from './common/config/env.validation';
 import { DatabaseModule } from './database/database.module';
-import { HealthModule } from './health/health.module';
+import { DisponibilidadeModule } from './disponibilidade/disponibilidade.module';
 import { EstabelecimentosModule } from './estabelecimentos/estabelecimentos.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { EspecialidadesModule } from './especialidades/especialidades.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
+import { BuscaModule } from './busca/busca.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     }),
     DatabaseModule,
     CommonModule,
-    HealthModule,
+    BuscaModule,
+    DisponibilidadeModule,
     UsuariosModule,
     EstabelecimentosModule,
     EspecialidadesModule,

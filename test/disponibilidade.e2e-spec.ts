@@ -4,8 +4,9 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
+import { BuscaService } from '../src/busca/busca.service';
 
-describe('Health (e2e)', () => {
+describe('Disponibilidade (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
@@ -20,6 +21,10 @@ describe('Health (e2e)', () => {
         onModuleDestroy: jest.fn(),
         isDatabaseConnected: jest.fn().mockResolvedValue(true),
       })
+      .overrideProvider(BuscaService)
+      .useValue({
+        estaDisponivel: jest.fn().mockResolvedValue(true),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -30,16 +35,28 @@ describe('Health (e2e)', () => {
     await app.close();
   });
 
-  it('GET /health retorna status ok', () => {
+  it('GET /health retorna status ok com banco e elasticsearch conectados', () => {
     return request(app.getHttpServer()).get('/health').expect(200).expect({
       status: 'ok',
-      database: 'connected',
+      banco: 'conectado',
+      elasticsearch: 'conectado',
     });
+  });
+
+  it('GET /disponibilidade retorna status ok', () => {
+    return request(app.getHttpServer())
+      .get('/disponibilidade')
+      .expect(200)
+      .expect({
+        status: 'ok',
+        banco: 'conectado',
+        elasticsearch: 'conectado',
+      });
   });
 
   it('GET / retorna api online', () => {
     return request(app.getHttpServer()).get('/').expect(200).expect({
-      message: 'api online',
+      mensagem: 'api online',
     });
   });
 });

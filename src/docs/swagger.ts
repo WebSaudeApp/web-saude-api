@@ -23,7 +23,10 @@ export function setupSwagger(app: INestApplication): void {
   }
 
   const config = builder
-    .addTag('Disponibilidade', 'Status da API e conexão com o PostgreSQL')
+    .addTag(
+      'Disponibilidade',
+      'Status da API e conexão com o PostgreSQL e Elasticsearch',
+    )
     .addTag(
       'Estabelecimentos',
       'Busca e cadastro de estabelecimentos, horários, especialidades e fotos',
