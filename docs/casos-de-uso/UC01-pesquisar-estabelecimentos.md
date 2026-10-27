@@ -11,8 +11,9 @@ O método `EstabelecimentosService.search()` aceita os filtros `termo`, `tipo`, 
 - `cidade` é comparada pelo nome completo (RN02).
 - `especialidade` aceita o ID ou o nome exato (RN06, A2).
 - Os tipos aceitos são `HOSPITAL` e `CLINICA`, gravados assim no banco. O valor recebido é convertido para maiúsculas antes da comparação, então `clinica` encontra `CLINICA` (RN05).
-- Os resultados são ordenados por nome (RN07).
-- A paginação usa página 1 e limite 20 como padrões (RN08).
+- A busca aceita parâmetros de geolocalização `lat`, `lng` e `raioKm` (padrão 10 km, máximo 50 km). Quando fornecidos, a busca é executada via Elasticsearch com ordenação por distância geográfica e cálculo de `distanciaKm` (1 casa decimal). Caso o Elasticsearch esteja indisponível, há fallback automático e transparente para a busca no banco relacional (PostgreSQL).
+- Sem coordenadas, os resultados são ordenados alfabeticamente por nome (RN07). Com coordenadas, são ordenados por proximidade com desempate estável por `nome.keyword` e `id`.
+- A paginação usa página 1 e limite 20 como padrões (RN08) e inclui a propriedade booleana `temMais` para simplificar a integração com infinite scroll no front-end (`temMais: pagina < totalPaginas`).
 - A resposta da busca tem o formato `{ dados, paginacao }`. Quando a página pedida passa da última, `dados` vem vazio e `paginacao.total` mantém o total real (E5).
 - Uma falha no banco é propagada pelo serviço (E6).
 
@@ -50,6 +51,10 @@ Os testes chamam os serviços diretamente, sem passar pelo controller ou pela ro
 | Especialidade inexistente devolve lista vazia                                                   | RN06, E1               |
 | Termo com bairro e cidade com acento chegam ao SQL sem acento e em minúsculas                   | RN02, RN03, CA02, CA10 |
 | Última página parcial: 23 estabelecimentos, `limite=10` e `pagina=3` trazem 3 itens e 3 páginas | RN08, A3, A4, CA06     |
+| Busca geográfica por proximidade via Elasticsearch com cálculo de `distanciaKm` e ordenação     | BE-09, BE-10           |
+| Busca geográfica com filtros combinados (termo, tipo, especialidade, cidade/estado)              | BE-11                  |
+| Fallback seguro para SQL quando Elasticsearch falha ou está indisponível                         | BE-14                  |
+| Paginação para scroll infinito sem repetição de itens e com flag `temMais`                      | BE-13                  |
 
 `src/reviews/reviews.service.spec.ts`:
 

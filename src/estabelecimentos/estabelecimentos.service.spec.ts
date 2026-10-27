@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { EspecialidadesService } from '../especialidades/especialidades.service';
+import { BuscaService } from '../busca/busca.service';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
 import { EstabelecimentosService } from './estabelecimentos.service';
 
@@ -16,24 +16,53 @@ describe('EstabelecimentosService', () => {
   const findUnique = jest.fn<(args: unknown) => Promise<unknown>>(() =>
     Promise.resolve(null),
   );
-  const groupBy = jest.fn<(args: unknown) => Promise<unknown[]>>(() =>
-    Promise.resolve([]),
-  );
   const queryRaw = jest.fn<
     (query: Prisma.Sql) => Promise<Array<{ id: string }>>
   >(() => Promise.resolve([]));
   const prisma = {
     estabelecimento: { count, findMany, findUnique },
-    review: { groupBy },
+    especialidade: { count: jest.fn(() => Promise.resolve(1)) },
     $queryRaw: queryRaw,
     $transaction: jest.fn((operations: Promise<unknown>[]) =>
       Promise.all(operations),
     ),
   } as unknown as PrismaService;
-  const service = new EstabelecimentosService(
-    prisma,
-    {} as EspecialidadesService,
+  const indexarEstabelecimento = jest.fn<(args: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
   );
+  const removerEstabelecimento = jest.fn<(args: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+  const obterCliente = jest.fn(() => ({
+    indices: {
+      refresh: jest.fn<() => Promise<void>>(() => Promise.resolve()),
+    },
+  }));
+  const buscarEstabelecimentos = jest.fn<
+    (params?: unknown) => Promise<{
+      itens: Array<{
+        estabelecimento: { id: string; [key: string]: unknown };
+        distanciaKm?: number;
+      }>;
+      total: number;
+      pagina: number;
+      totalPaginas: number;
+    }>
+  >(() =>
+    Promise.resolve({
+      itens: [],
+      total: 0,
+      pagina: 1,
+      totalPaginas: 0,
+    }),
+  );
+  const buscaService = {
+    indexarEstabelecimento,
+    removerEstabelecimento,
+    buscarEstabelecimentos,
+    obterCliente,
+  } as unknown as BuscaService;
+  const service = new EstabelecimentosService(prisma, buscaService);
 
   const estabelecimento = {
     id: 'estabelecimento-1',
@@ -67,7 +96,6 @@ describe('EstabelecimentosService', () => {
     findMany.mockResolvedValue([]);
     queryRaw.mockResolvedValue([]);
     findUnique.mockResolvedValue(null);
-    groupBy.mockResolvedValue([]);
   });
 
   it('devolve o resultado com a paginação padrão e os campos dos models (RN07, RN08, RN11)', async () => {
@@ -101,6 +129,7 @@ describe('EstabelecimentosService', () => {
       limite: 20,
       total: 21,
       totalPaginas: 2,
+      temMais: true,
     });
     expect(result.dados[0]).not.toHaveProperty('notaMedia');
     expect(queryRaw).not.toHaveBeenCalled();
@@ -144,6 +173,7 @@ describe('EstabelecimentosService', () => {
       limite: 5,
       total: 1,
       totalPaginas: 1,
+      temMais: false,
     });
   });
 
@@ -159,6 +189,7 @@ describe('EstabelecimentosService', () => {
         limite: 10,
         total: 0,
         totalPaginas: 0,
+        temMais: false,
       },
     });
   });
@@ -177,6 +208,7 @@ describe('EstabelecimentosService', () => {
       limite: 10,
       total: 15,
       totalPaginas: 2,
+      temMais: false,
     });
   });
 
@@ -262,6 +294,7 @@ describe('EstabelecimentosService', () => {
         limite: 20,
         total: 0,
         totalPaginas: 0,
+        temMais: false,
       },
     });
   });
@@ -285,6 +318,7 @@ describe('EstabelecimentosService', () => {
         limite: 20,
         total: 0,
         totalPaginas: 0,
+        temMais: false,
       },
     });
   });
@@ -336,6 +370,365 @@ describe('EstabelecimentosService', () => {
       limite: 10,
       total: 23,
       totalPaginas: 3,
+      temMais: false,
+    });
+  });
+
+  describe('Sincronização com o Elasticsearch (BE-15)', () => {
+    it('sincroniza o estabelecimento com o Elasticsearch com sucesso', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.sincronizarComElasticsearch(estabelecimento.id);
+
+      expect(indexarEstabelecimento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: estabelecimento.id,
+          nome: estabelecimento.nome,
+          localizacao: {
+            lat: estabelecimento.endereco.latitude,
+            lon: estabelecimento.endereco.longitude,
+          },
+        }),
+      );
+    });
+
+    it('não lança erro quando a indexação no Elasticsearch falha (resiliência / tolerância a falhas)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+      indexarEstabelecimento.mockRejectedValue(
+        new Error('Elasticsearch fora do ar'),
+      );
+
+      await expect(
+        service.sincronizarComElasticsearch(estabelecimento.id),
+      ).resolves.toBeUndefined();
+    });
+
+    it('remove o estabelecimento do Elasticsearch com sucesso', async () => {
+      await service.removerDoElasticsearch(estabelecimento.id);
+
+      expect(removerEstabelecimento).toHaveBeenCalledWith(estabelecimento.id);
+    });
+
+    it('não lança erro quando a remoção no Elasticsearch falha', async () => {
+      removerEstabelecimento.mockRejectedValue(
+        new Error('Elasticsearch fora do ar'),
+      );
+
+      await expect(
+        service.removerDoElasticsearch(estabelecimento.id),
+      ).resolves.toBeUndefined();
+    });
+
+    it('reindexa todos os estabelecimentos do banco com sucesso (BE-16)', async () => {
+      findMany.mockResolvedValue([
+        { id: 'estabelecimento-1' },
+        { id: 'estabelecimento-2' },
+      ]);
+      findUnique.mockResolvedValue(estabelecimento);
+      indexarEstabelecimento.mockResolvedValue(undefined);
+
+      const resultado = await service.reindexarTodos();
+
+      expect(resultado).toEqual({
+        total: 2,
+        indexados: 2,
+        erros: 0,
+        falhas: [],
+      });
+      expect(indexarEstabelecimento).toHaveBeenCalledTimes(2);
+    });
+
+    it('registra falha individual e continua reindexando os demais estabelecimentos', async () => {
+      findMany.mockResolvedValue([
+        { id: 'estabelecimento-1' },
+        { id: 'estabelecimento-2' },
+      ]);
+      findUnique
+        .mockResolvedValueOnce(estabelecimento)
+        .mockRejectedValueOnce(new Error('Erro no estabelecimento 2'));
+
+      const resultado = await service.reindexarTodos();
+
+      expect(resultado.total).toBe(2);
+      expect(resultado.indexados).toBe(1);
+      expect(resultado.erros).toBe(1);
+      expect(resultado.falhas).toHaveLength(1);
+      expect(resultado.falhas[0].id).toBe('estabelecimento-2');
+    });
+  });
+
+  describe('search por proximidade geográfica (BE-09)', () => {
+    const estabelecimento2 = {
+      ...estabelecimento,
+      id: 'estabelecimento-2',
+      nome: 'Clínica Boa Vista',
+    };
+
+    beforeEach(() => {
+      buscarEstabelecimentos.mockReset();
+      findMany.mockReset();
+    });
+
+    it('busca por proximidade geográfica retornando lista ordenada com distanciaKm arredondada', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-1' },
+            distanciaKm: 1.234,
+          },
+          {
+            estabelecimento: { id: 'estabelecimento-2' },
+            distanciaKm: 5.678,
+          },
+        ],
+        total: 2,
+        pagina: 1,
+        totalPaginas: 1,
+      });
+
+      findMany.mockResolvedValue([estabelecimento2, estabelecimento]);
+
+      const resultado = await service.search({
+        lat: -8.05389,
+        lng: -34.88111,
+        raioKm: 10,
+      } as BuscarEstabelecimentosDto);
+
+      expect(buscarEstabelecimentos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          localizacao: {
+            lat: -8.05389,
+            lon: -34.88111,
+            raioKm: 10,
+          },
+        }),
+      );
+
+      // Confere ordem exata do Elasticsearch e distanciaKm com 1 casa decimal
+      expect(resultado.dados).toHaveLength(2);
+      expect(resultado.dados[0].id).toBe('estabelecimento-1');
+      expect(
+        (resultado.dados[0] as unknown as { distanciaKm: number }).distanciaKm,
+      ).toBe(1.2);
+      expect(resultado.dados[1].id).toBe('estabelecimento-2');
+      expect(
+        (resultado.dados[1] as unknown as { distanciaKm: number }).distanciaKm,
+      ).toBe(5.7);
+      expect(resultado.paginacao.total).toBe(2);
+    });
+
+    it('retorna lista vazia quando nenhum estabelecimento está no raio', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [],
+        total: 0,
+        pagina: 1,
+        totalPaginas: 0,
+      });
+
+      const resultado = await service.search({
+        lat: -8.05,
+        lng: -34.88,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toEqual([]);
+      expect(resultado.paginacao.total).toBe(0);
+      expect(resultado.paginacao.totalPaginas).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejeita lat sem lng com erro 400', async () => {
+      await expect(
+        service.search({ lat: -8.05 } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita lng sem lat com erro 400', async () => {
+      await expect(
+        service.search({ lng: -34.88 } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejeita raioKm sem coordenadas com erro 400', async () => {
+      await expect(
+        service.search({ raioKm: 15 } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('lança erro 503 quando o Elasticsearch falha na busca geográfica', async () => {
+      buscarEstabelecimentos.mockRejectedValue(
+        new Error('Elasticsearch indisponível'),
+      );
+
+      await expect(
+        service.search({
+          lat: -8.05,
+          lng: -34.88,
+        } as BuscarEstabelecimentosDto),
+      ).rejects.toThrow(
+        'Serviço de busca por localização temporariamente indisponível.',
+      );
+    });
+
+    it('combina múltiplos filtros (termo, tipo, especialidade, cidade, estado e raio) na busca geográfica (BE-11)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-1' },
+            distanciaKm: 2.1,
+          },
+        ],
+        total: 1,
+        pagina: 1,
+        totalPaginas: 1,
+      });
+
+      findMany.mockResolvedValue([estabelecimento]);
+
+      const resultado = await service.search({
+        termo: 'São João',
+        tipo: 'HOSPITAL',
+        especialidade: 'Cardiologia',
+        cidade: 'Recife',
+        estado: 'PE',
+        lat: -8.0476,
+        lng: -34.877,
+        raioKm: 15,
+      } as BuscarEstabelecimentosDto);
+
+      expect(buscarEstabelecimentos).toHaveBeenCalledWith({
+        termo: 'São João',
+        tipo: 'HOSPITAL',
+        especialidade: 'Cardiologia',
+        cidade: 'Recife',
+        estado: 'PE',
+        localizacao: {
+          lat: -8.0476,
+          lon: -34.877,
+          raioKm: 15,
+        },
+        pagina: 1,
+        limite: 20,
+      });
+
+      expect(resultado.dados).toHaveLength(1);
+      expect(resultado.dados[0].id).toBe('estabelecimento-1');
+      expect((resultado.dados[0] as { distanciaKm?: number }).distanciaKm).toBe(
+        2.1,
+      );
+    });
+
+    it('tipo inexistente na busca geográfica devolve lista vazia, sem erro (RN05, BE-11)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [],
+        total: 0,
+        pagina: 1,
+        totalPaginas: 0,
+      });
+
+      const resultado = await service.search({
+        tipo: 'LABORATORIO',
+        lat: -8.05,
+        lng: -34.88,
+        raioKm: 10,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toEqual([]);
+      expect(resultado.paginacao.total).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('especialidade inexistente na busca geográfica devolve lista vazia, sem erro (RN06, BE-11)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [],
+        total: 0,
+        pagina: 1,
+        totalPaginas: 0,
+      });
+
+      const resultado = await service.search({
+        especialidade: 'Especialidade Inexistente',
+        lat: -8.05,
+        lng: -34.88,
+        raioKm: 10,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toEqual([]);
+      expect(resultado.paginacao.total).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('paginação para scroll infinito informa temMais e mantém ordem estável (BE-13)', async () => {
+      // Página 1 de 2
+      buscarEstabelecimentos.mockResolvedValueOnce({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-1' },
+            distanciaKm: 1.2,
+          },
+        ],
+        total: 2,
+        pagina: 1,
+        totalPaginas: 2,
+      });
+
+      findMany.mockResolvedValueOnce([estabelecimento]);
+
+      const pagina1 = await service.search({
+        lat: -8.05389,
+        lng: -34.88111,
+        limite: 1,
+        pagina: 1,
+      });
+
+      expect(pagina1.dados).toHaveLength(1);
+      expect(pagina1.dados[0].id).toBe('estabelecimento-1');
+      expect(pagina1.paginacao.temMais).toBe(true);
+      expect(pagina1.paginacao.pagina).toBe(1);
+      expect(pagina1.paginacao.totalPaginas).toBe(2);
+
+      // Página 2 de 2 (última página)
+      buscarEstabelecimentos.mockResolvedValueOnce({
+        itens: [
+          {
+            estabelecimento: { id: 'estabelecimento-2' },
+            distanciaKm: 3.5,
+          },
+        ],
+        total: 2,
+        pagina: 2,
+        totalPaginas: 2,
+      });
+
+      findMany.mockResolvedValueOnce([
+        { ...estabelecimento, id: 'estabelecimento-2', nome: 'Clínica 2' },
+      ]);
+
+      const pagina2 = await service.search({
+        lat: -8.05389,
+        lng: -34.88111,
+        limite: 1,
+        pagina: 2,
+      });
+
+      expect(pagina2.dados).toHaveLength(1);
+      expect(pagina2.dados[0].id).toBe('estabelecimento-2');
+      expect(pagina2.paginacao.temMais).toBe(false);
+      expect(pagina2.paginacao.pagina).toBe(2);
+    });
+
+    it('sem coordenadas, a busca funciona pelo banco sem campo distanciaKm (BE-14)', async () => {
+      count.mockResolvedValueOnce(1);
+      findMany.mockResolvedValueOnce([estabelecimento]);
+
+      const resultado = await service.search({
+        termo: 'São João',
+      } as BuscarEstabelecimentosDto);
+
+      expect(buscarEstabelecimentos).not.toHaveBeenCalled();
+      expect(resultado.dados).toHaveLength(1);
+      expect(resultado.dados[0]).not.toHaveProperty('distanciaKm');
+      expect(resultado.paginacao.total).toBe(1);
+      expect(resultado.paginacao.temMais).toBe(false);
     });
   });
 });
