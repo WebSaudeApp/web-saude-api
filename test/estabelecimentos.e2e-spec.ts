@@ -47,6 +47,17 @@ describe('Estabelecimentos (e2e)', () => {
     );
     prisma = app.get(PrismaService);
     await app.init();
+
+    await prisma.tipoEstabelecimento.upsert({
+      where: { nome: 'HOSPITAL' },
+      update: {},
+      create: { nome: 'HOSPITAL' },
+    });
+    await prisma.tipoEstabelecimento.upsert({
+      where: { nome: 'CLINICA' },
+      update: {},
+      create: { nome: 'CLINICA' },
+    });
   });
 
   afterAll(async () => {

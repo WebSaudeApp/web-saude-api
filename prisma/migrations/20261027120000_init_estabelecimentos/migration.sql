@@ -138,3 +138,10 @@ ALTER TABLE "midias" ADD CONSTRAINT "midias_estabelecimentoId_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "contatos" ADD CONSTRAINT "contatos_estabelecimentoId_fkey" FOREIGN KEY ("estabelecimentoId") REFERENCES "estabelecimentos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Seed inicial de tipos de estabelecimento
+INSERT INTO "tipos_estabelecimento" ("id", "nome") VALUES
+  ('11111111-1111-4111-8111-111111111111', 'HOSPITAL'),
+  ('22222222-2222-4222-8222-222222222222', 'CLINICA')
+ON CONFLICT ("nome") DO NOTHING;
+
