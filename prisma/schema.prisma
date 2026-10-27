@@ -31,15 +31,6 @@ enum DiaSemana {
   SABADO
 }
 
-model TipoUsuario {
-  id   String @id @default(uuid())
-  nome String @unique
-
-  usuarios Usuario[]
-
-  @@map("tipos_usuario")
-}
-
 model TipoEstabelecimento {
   id   String @id @default(uuid())
   nome String @unique
@@ -47,23 +38,6 @@ model TipoEstabelecimento {
   estabelecimentos Estabelecimento[]
 
   @@map("tipos_estabelecimento")
-}
-
-model Usuario {
-  id         String  @id @default(uuid())
-  nome       String
-  cpf        String?
-  genero     String?
-  tipoId     String
-  enderecoId String? @unique
-
-  tipo     TipoUsuario @relation(fields: [tipoId], references: [id])
-  endereco Endereco?   @relation(fields: [enderecoId], references: [id])
-
-  reviews  Review[]
-  contatos Contato[]
-
-  @@map("usuarios")
 }
 
 model Estabelecimento {
@@ -78,7 +52,6 @@ model Estabelecimento {
   especialidades EstabelecimentoEspecialidade[]
   horarios       HorarioFuncionamento[]
   midias         Midia[]
-  reviews        Review[]
 
   @@index([tipoId])
   @@map("estabelecimentos")
@@ -145,7 +118,6 @@ model Endereco {
   longitude   Float
 
   estabelecimento Estabelecimento?
-  usuario         Usuario?
 
   @@index([cidade, estado])
   @@map("enderecos")
@@ -153,31 +125,12 @@ model Endereco {
 
 model Contato {
   id                String      @id @default(uuid())
-  estabelecimentoId String?
-  usuarioId         String?
+  estabelecimentoId String
   tipo              TipoContato
   valor             String
 
-  estabelecimento Estabelecimento? @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
-  usuario         Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  @@unique([estabelecimentoId, tipo, valor])
-  @@unique([usuarioId, tipo, valor])
-  @@map("contatos")
-}
-
-model Review {
-  id                String   @id @default(uuid())
-  autorId           String
-  estabelecimentoId String
-  nota              Int
-  comentario        String?
-  criadoEm          DateTime @default(now())
-
-  autor           Usuario         @relation(fields: [autorId], references: [id], onDelete: Cascade)
   estabelecimento Estabelecimento @relation(fields: [estabelecimentoId], references: [id], onDelete: Cascade)
 
-  @@unique([autorId, estabelecimentoId])
-  @@index([estabelecimentoId])
-  @@map("reviews")
+  @@unique([estabelecimentoId, tipo, valor])
+  @@map("contatos")
 }

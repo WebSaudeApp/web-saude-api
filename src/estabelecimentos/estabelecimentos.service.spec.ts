@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { EspecialidadesService } from '../especialidades/especialidades.service';
 import { BuscaService } from '../busca/busca.service';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
 import { EstabelecimentosService } from './estabelecimentos.service';
@@ -17,15 +16,12 @@ describe('EstabelecimentosService', () => {
   const findUnique = jest.fn<(args: unknown) => Promise<unknown>>(() =>
     Promise.resolve(null),
   );
-  const groupBy = jest.fn<(args: unknown) => Promise<unknown[]>>(() =>
-    Promise.resolve([]),
-  );
   const queryRaw = jest.fn<
     (query: Prisma.Sql) => Promise<Array<{ id: string }>>
   >(() => Promise.resolve([]));
   const prisma = {
     estabelecimento: { count, findMany, findUnique },
-    review: { groupBy },
+    especialidade: { count: jest.fn(() => Promise.resolve(1)) },
     $queryRaw: queryRaw,
     $transaction: jest.fn((operations: Promise<unknown>[]) =>
       Promise.all(operations),
@@ -66,11 +62,7 @@ describe('EstabelecimentosService', () => {
     buscarEstabelecimentos,
     obterCliente,
   } as unknown as BuscaService;
-  const service = new EstabelecimentosService(
-    prisma,
-    {} as EspecialidadesService,
-    buscaService,
-  );
+  const service = new EstabelecimentosService(prisma, buscaService);
 
   const estabelecimento = {
     id: 'estabelecimento-1',
@@ -104,7 +96,6 @@ describe('EstabelecimentosService', () => {
     findMany.mockResolvedValue([]);
     queryRaw.mockResolvedValue([]);
     findUnique.mockResolvedValue(null);
-    groupBy.mockResolvedValue([]);
   });
 
   it('devolve o resultado com a paginação padrão e os campos dos models (RN07, RN08, RN11)', async () => {

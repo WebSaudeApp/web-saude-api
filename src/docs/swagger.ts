@@ -31,9 +31,6 @@ export function setupSwagger(app: INestApplication): void {
       'Estabelecimentos',
       'Busca e cadastro de estabelecimentos, horários, especialidades e fotos',
     )
-    .addTag('Usuários', 'Cadastro de usuários, endereço e contatos')
-    .addTag('Especialidades', 'Cadastro de especialidades médicas')
-    .addTag('Avaliações', 'Edição e exclusão de avaliações')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

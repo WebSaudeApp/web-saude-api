@@ -7,17 +7,15 @@ import {
 } from '@nestjs/common';
 import { Prisma, TipoMidia } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { normalizeContatos } from '../common/contatos.util';
+import { normalizeContatos } from './contatos.util';
 import { paginada } from '../common/dto/paginacao-query.dto';
 import { validarRegrasGeograficas } from './dto/parse-buscar-estabelecimentos-query';
 import {
   toEnderecoCreate,
   toEnderecoResponse,
   toEnderecoUpdate,
-} from '../common/endereco.util';
+} from './endereco.util';
 import { PrismaService } from '../database/prisma.service';
-import { arredondarNota } from '../reviews/nota.util';
-import { EspecialidadesService } from '../especialidades/especialidades.service';
 import { BuscaService } from '../busca/busca.service';
 import { mapearEstabelecimentoParaDocumento } from '../busca/documento-estabelecimento';
 import { AdicionarMidiaDto } from './dto/adicionar-midia.dto';
@@ -33,7 +31,6 @@ import {
   MAX_IMAGE_SIZE_BYTES,
   MAX_UNIT_IMAGES,
   publicImageUrl,
-  removeUploadedFile,
 } from './midia.util';
 
 const estabelecimentoInclude = {
@@ -60,7 +57,7 @@ const CARACTERES_ACENTUADOS = 'áàâãäéèêëíìîïóòôõöúùûüç';
 const CARACTERES_SEM_ACENTO = 'aaaaaeeeeiiiiooooouuuuc';
 
 // Os tipos ficam gravados em maiúsculas: HOSPITAL e CLINICA (RN05).
-export function tipoEstabelecimentoArmazenado(tipo: string): string {
+function tipoEstabelecimentoArmazenado(tipo: string): string {
   return tipo.trim().toLocaleUpperCase('pt-BR');
 }
 
@@ -78,7 +75,6 @@ export class EstabelecimentosService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly especialidadesService: EspecialidadesService,
     private readonly buscaService: BuscaService,
   ) {}
 
@@ -279,7 +275,7 @@ export class EstabelecimentosService {
 
   async findOne(id: string) {
     const estabelecimento = await this.findExisting(id);
-    const notas = await this.notas([id]);
+    const notas = this.notas([id]);
     return this.toResponse(estabelecimento, notas.get(id));
   }
 
@@ -335,7 +331,7 @@ export class EstabelecimentosService {
 
   async setSpecialties(id: string, dto: DefinirEspecialidadesDto) {
     await this.findExisting(id);
-    await this.especialidadesService.assertIdsExist(dto.especialidadeIds);
+    await this.assertEspecialidadesExist(dto.especialidadeIds);
     await this.prisma.$transaction([
       this.prisma.estabelecimentoEspecialidade.deleteMany({
         where: { estabelecimentoId: id },
@@ -500,8 +496,20 @@ export class EstabelecimentosService {
       throw new NotFoundException('Imagem não encontrada.');
     }
     await this.prisma.midia.delete({ where: { id: midiaId } });
-    await removeUploadedFile(midia.url);
     return this.findOne(id);
+  }
+
+  private async assertEspecialidadesExist(ids: string[]): Promise<void> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) {
+      return;
+    }
+    const count = await this.prisma.especialidade.count({
+      where: { id: { in: unique } },
+    });
+    if (count !== unique.length) {
+      throw new NotFoundException('Uma ou mais especialidades não existem.');
+    }
   }
 
   private async findExisting(id: string): Promise<EstabelecimentoCompleto> {
@@ -527,22 +535,16 @@ export class EstabelecimentosService {
     return tipo.id;
   }
 
-  private async notas(ids: string[]): Promise<Map<string, Nota>> {
+  private notas(ids: string[]): Map<string, Nota> {
     if (ids.length === 0) {
       return new Map();
     }
-    const grupos = await this.prisma.review.groupBy({
-      by: ['estabelecimentoId'],
-      where: { estabelecimentoId: { in: ids } },
-      _avg: { nota: true },
-      _count: { _all: true },
-    });
     return new Map(
-      grupos.map((grupo) => [
-        grupo.estabelecimentoId,
+      ids.map((id) => [
+        id,
         {
-          notaMedia: arredondarNota(grupo._avg.nota),
-          totalReviews: grupo._count._all,
+          notaMedia: 0,
+          totalReviews: 0,
         },
       ]),
     );

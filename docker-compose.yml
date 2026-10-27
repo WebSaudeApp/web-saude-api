@@ -17,14 +17,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # Reservado para cache/filas (BullMQ) em fase futura — não iniciar no MVP.
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: web-saude-redis
-  #   restart: unless-stopped
-  #   ports:
-  #     - '6379:6379'
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.2
     container_name: web-saude-elasticsearch

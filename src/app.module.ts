@@ -9,10 +9,6 @@ import { validate } from './common/config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { DisponibilidadeModule } from './disponibilidade/disponibilidade.module';
 import { EstabelecimentosModule } from './estabelecimentos/estabelecimentos.module';
-import { NotificationsModule } from './notifications/notifications.module';
-import { ReviewsModule } from './reviews/reviews.module';
-import { EspecialidadesModule } from './especialidades/especialidades.module';
-import { UsuariosModule } from './usuarios/usuarios.module';
 import { BuscaModule } from './busca/busca.module';
 
 @Module({
@@ -36,11 +32,7 @@ import { BuscaModule } from './busca/busca.module';
     CommonModule,
     BuscaModule,
     DisponibilidadeModule,
-    UsuariosModule,
     EstabelecimentosModule,
-    EspecialidadesModule,
-    ReviewsModule,
-    NotificationsModule,
   ],
   providers: [
     {
