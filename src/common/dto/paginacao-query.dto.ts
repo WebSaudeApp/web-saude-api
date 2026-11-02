@@ -26,6 +26,7 @@ export type PaginacaoResult<T> = {
     limite: number;
     total: number;
     totalPaginas: number;
+    temMais: boolean;
   };
 };
 
@@ -35,13 +36,15 @@ export function paginada<T>(
   pagina: number,
   limite: number,
 ): PaginacaoResult<T> {
+  const totalPaginas = total === 0 ? 0 : Math.ceil(total / limite);
   return {
     dados,
     paginacao: {
       pagina,
       limite,
       total,
-      totalPaginas: total === 0 ? 0 : Math.ceil(total / limite),
+      totalPaginas,
+      temMais: pagina < totalPaginas,
     },
   };
 }

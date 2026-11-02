@@ -37,3 +37,4 @@ process.env.CORS_ORIGINS ??= 'http://localhost:5173';
 process.env.THROTTLE_TTL_MS ??= '60000';
 process.env.THROTTLE_LIMIT ??= '100';
 process.env.SWAGGER_ENABLED ??= 'false';
+process.env.ELASTICSEARCH_NODE ??= 'http://localhost:9200';

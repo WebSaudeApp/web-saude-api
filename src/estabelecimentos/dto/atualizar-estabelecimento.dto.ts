@@ -9,8 +9,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ContatoDto } from '../../common/dto/contato.dto';
-import { UpdateEnderecoDto } from '../../common/dto/endereco.dto';
+import { ContatoDto } from './contato.dto';
+import { UpdateEnderecoDto } from './endereco.dto';
 
 export class AtualizarEstabelecimentoDto {
   @ApiPropertyOptional()

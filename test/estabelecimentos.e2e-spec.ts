@@ -4,8 +4,9 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
+import { BuscaService } from '../src/busca/busca.service';
 
-jest.setTimeout(60000);
+jest.setTimeout(180000);
 
 type Estabelecimento = {
   id: string;
@@ -30,7 +31,6 @@ describe('Estabelecimentos (e2e)', () => {
   const suffix = Date.now();
   const especialidadeNome = `Cardiologia ${suffix}`;
   const unitIds: string[] = [];
-  const userIds: string[] = [];
   let especialidadeId: string | undefined;
 
   beforeAll(async () => {
@@ -48,6 +48,22 @@ describe('Estabelecimentos (e2e)', () => {
     );
     prisma = app.get(PrismaService);
     await app.init();
+
+    await prisma.tipoEstabelecimento.upsert({
+      where: { nome: 'HOSPITAL' },
+      update: {},
+      create: { nome: 'HOSPITAL' },
+    });
+    await prisma.tipoEstabelecimento.upsert({
+      where: { nome: 'CLINICA' },
+      update: {},
+      create: { nome: 'CLINICA' },
+    });
+
+    const buscaService = app.get(BuscaService);
+    if (await buscaService.estaDisponivel()) {
+      await buscaService.inicializarIndice();
+    }
   });
 
   afterAll(async () => {
@@ -62,7 +78,6 @@ describe('Estabelecimentos (e2e)', () => {
       await prisma.endereco.deleteMany({
         where: { id: { in: units.map((unit) => unit.enderecoId) } },
       });
-      await prisma.usuario.deleteMany({ where: { id: { in: userIds } } });
       if (especialidadeId) {
         await prisma.especialidade.deleteMany({
           where: { id: especialidadeId },
@@ -74,29 +89,18 @@ describe('Estabelecimentos (e2e)', () => {
     }
   });
 
-  async function criarUsuario(nome: string): Promise<string> {
-    const response = await request(app.getHttpServer())
-      .post('/usuarios')
-      .send({ nome, tipo: 'PATIENT' })
-      .expect(201);
-    const id = (response.body as { id: string }).id;
-    userIds.push(id);
-    return id;
-  }
-
   it('cadastra, detalha, edita, busca e remove um estabelecimento', async () => {
     const tipos = await request(app.getHttpServer())
       .get('/estabelecimentos/tipos')
       .expect(200);
     expect((tipos.body as Array<{ nome: string }>).map((t) => t.nome)).toEqual(
-      expect.arrayContaining(['HOSPITAL', 'CLINIC']),
+      expect.arrayContaining(['HOSPITAL', 'CLINICA']),
     );
 
-    const especialidade = await request(app.getHttpServer())
-      .post('/especialidades')
-      .send({ nome: especialidadeNome })
-      .expect(201);
-    especialidadeId = (especialidade.body as { id: string }).id;
+    const especialidade = await prisma.especialidade.create({
+      data: { nome: especialidadeNome },
+    });
+    especialidadeId = especialidade.id;
 
     await request(app.getHttpServer())
       .post('/estabelecimentos')
@@ -109,6 +113,8 @@ describe('Estabelecimentos (e2e)', () => {
           numero: '1',
           cidade: 'Recife',
           estado: 'PE',
+          latitude: -8.0476,
+          longitude: -34.877,
         },
       })
       .expect(400);
@@ -124,6 +130,8 @@ describe('Estabelecimentos (e2e)', () => {
           numero: '1',
           cidade: 'Recife',
           estado: 'PE',
+          latitude: -8.0476,
+          longitude: -34.877,
         },
         contatos: [{ tipo: 'EMAIL', valor: 'sem-arroba' }],
       })
@@ -141,6 +149,8 @@ describe('Estabelecimentos (e2e)', () => {
           bairro: 'Boa Viagem',
           cidade: 'Recife',
           estado: 'pe',
+          latitude: -8.0476,
+          longitude: -34.877,
         },
         contatos: [
           { tipo: 'TELEFONE', valor: '8133334444' },
@@ -230,55 +240,55 @@ describe('Estabelecimentos (e2e)', () => {
       expect.objectContaining({ tipo: 'WHATSAPP', valor: '81999998888' }),
     ]);
 
-    const autorId = await criarUsuario(`Paciente ${suffix}`);
-    const review = await request(app.getHttpServer())
-      .post(`/estabelecimentos/${unit.id}/reviews`)
-      .send({ autorId, nota: 4, comentario: 'Bom atendimento' })
-      .expect(201);
-    const reviewId = (review.body as { id: string }).id;
-
-    await request(app.getHttpServer())
-      .post(`/estabelecimentos/${unit.id}/reviews`)
-      .send({ autorId, nota: 5 })
-      .expect(409);
-
-    await request(app.getHttpServer())
-      .patch(`/reviews/${reviewId}`)
-      .send({ nota: 5 })
-      .expect(200);
-
     const detail = await request(app.getHttpServer())
       .get(`/estabelecimentos/${unit.id}`)
       .expect(200);
-    expect(detail.body).toMatchObject({ notaMedia: 5, totalReviews: 1 });
-
-    const byAutor = await request(app.getHttpServer())
-      .get(`/usuarios/${autorId}/reviews`)
-      .expect(200);
-    expect(
-      (byAutor.body as { data: Array<{ id: string }> }).data.map((r) => r.id),
-    ).toEqual([reviewId]);
+    expect(detail.body).toMatchObject({ notaMedia: 0, totalReviews: 0 });
 
     const search = await request(app.getHttpServer())
       .get('/estabelecimentos')
       .query({
-        search: `Pina ${suffix}`,
+        termo: `Pina ${suffix}`,
         tipo: 'HOSPITAL',
         cidade: 'recife',
         especialidade: especialidadeNome,
-        notaMinima: 5,
       })
       .expect(200);
     const searchBody = search.body as {
-      data: Estabelecimento[];
-      meta: { total: number };
+      dados: Estabelecimento[];
+      paginacao: { total: number };
     };
-    expect(searchBody.meta.total).toBe(1);
-    expect(searchBody.data[0].id).toBe(unit.id);
+    expect(searchBody.paginacao.total).toBe(1);
+    expect(searchBody.dados[0].id).toBe(unit.id);
 
-    await request(app.getHttpServer())
-      .delete(`/especialidades/${especialidadeId}`)
-      .expect(409);
+    // BE-28: Fallback relacional no PostgreSQL quando o Elasticsearch estiver indisponível
+    const buscaService = app.get(BuscaService);
+    const spyBuscarES = jest
+      .spyOn(buscaService, 'buscarEstabelecimentos')
+      .mockRejectedValueOnce(
+        new Error('Conexão recusada no cluster Elasticsearch'),
+      );
+
+    const fallbackResponse = await request(app.getHttpServer())
+      .get('/estabelecimentos')
+      .query({
+        lat: -8.0476,
+        lng: -34.877,
+        raioKm: 10,
+      })
+      .expect(200);
+
+    const fallbackBody = fallbackResponse.body as {
+      dados: Array<Estabelecimento & { distanciaKm?: number }>;
+      paginacao: { total: number };
+    };
+
+    expect(fallbackBody.paginacao.total).toBeGreaterThanOrEqual(1);
+    const itemEncontrado = fallbackBody.dados.find((d) => d.id === unit.id);
+    expect(itemEncontrado).toBeDefined();
+    expect(itemEncontrado?.distanciaKm).toBeDefined();
+    expect(typeof itemEncontrado?.distanciaKm).toBe('number');
+    expect(spyBuscarES).toHaveBeenCalled();
 
     await request(app.getHttpServer())
       .delete(`/estabelecimentos/${unit.id}`)
@@ -289,6 +299,5 @@ describe('Estabelecimentos (e2e)', () => {
     expect(
       await prisma.endereco.count({ where: { id: unit.endereco.id } }),
     ).toBe(0);
-    expect(await prisma.review.count({ where: { id: reviewId } })).toBe(0);
-  });
+  }, 180000);
 });

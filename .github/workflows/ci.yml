@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/**']
   pull_request:
     branches: [main]
 
@@ -24,19 +24,28 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.2
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: 'false'
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -s http://localhost:9200 >/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       NODE_ENV: test
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/websaude
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/websaude
+      ELASTICSEARCH_NODE: http://localhost:9200
       CORS_ORIGINS: http://localhost:5173
       THROTTLE_TTL_MS: '60000'
       THROTTLE_LIMIT: '1000'
       SWAGGER_ENABLED: 'false'
-      JWT_ACCESS_SECRET: ci-access-secret-change-me-min-32-chars
-      JWT_REFRESH_SECRET: ci-refresh-secret-change-me-min-32-chars
-      JWT_ACCESS_EXPIRES: 15m
-      JWT_REFRESH_EXPIRES: 7d
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
