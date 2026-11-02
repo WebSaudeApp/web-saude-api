@@ -120,6 +120,7 @@ model Endereco {
   estabelecimento Estabelecimento?
 
   @@index([cidade, estado])
+  @@index([latitude, longitude])
   @@map("enderecos")
 }
 

@@ -554,19 +554,26 @@ describe('EstabelecimentosService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('lança erro 503 quando o Elasticsearch falha na busca geográfica', async () => {
+    it('executa fallback no PostgreSQL com status 200 e ordenação por distância quando Elasticsearch falha (BE-28)', async () => {
       buscarEstabelecimentos.mockRejectedValue(
         new Error('Elasticsearch indisponível'),
       );
 
-      await expect(
-        service.search({
-          lat: -8.05,
-          lng: -34.88,
-        } as BuscarEstabelecimentosDto),
-      ).rejects.toThrow(
-        'Serviço de busca por localização temporariamente indisponível.',
-      );
+      queryRaw
+        .mockResolvedValueOnce([{ total: 1 }])
+        .mockResolvedValueOnce([{ id: 'estabelecimento-1', distancia: 2.2 }]);
+
+      findMany.mockResolvedValue([estabelecimento]);
+
+      const resultado = await service.search({
+        lat: -8.05,
+        lng: -34.88,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.paginacao.total).toBe(1);
+      expect(resultado.dados).toHaveLength(1);
+      expect(resultado.dados[0].id).toBe('estabelecimento-1');
+      expect(resultado.dados[0].distanciaKm).toBe(2.2);
     });
 
     it('combina múltiplos filtros (termo, tipo, especialidade, cidade, estado e raio) na busca geográfica (BE-11)', async () => {

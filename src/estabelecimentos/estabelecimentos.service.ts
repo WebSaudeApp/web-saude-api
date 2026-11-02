@@ -3,7 +3,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, TipoMidia } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -201,13 +200,119 @@ export class EstabelecimentosService {
       if (erro instanceof BadRequestException) {
         throw erro;
       }
-      this.logger.error(
-        `Falha ao realizar busca por proximidade no Elasticsearch: ${String(erro)}`,
-      );
-      throw new ServiceUnavailableException(
-        'Serviço de busca por localização temporariamente indisponível.',
+      return this.buscarPorProximidadeFallbackPostgres(query, pagina, limite);
+    }
+  }
+
+  private async buscarPorProximidadeFallbackPostgres(
+    query: BuscarEstabelecimentosDto,
+    pagina: number,
+    limite: number,
+  ) {
+    this.logger.warn(
+      'Elasticsearch indisponível. Executando fallback de busca geográfica no PostgreSQL.',
+    );
+
+    const lat = query.lat!;
+    const lon = query.lng!;
+    const raioKm = query.raioKm ?? 10;
+    const offset = (pagina - 1) * limite;
+
+    const condicoes: Prisma.Sql[] = [];
+
+    // Fórmula de Haversine para cálculo de distância geodésica em km (raio da Terra = 6371 km)
+    const distanciaSql = Prisma.sql`(
+      6371 * acos(
+        least(1.0, greatest(-1.0,
+          cos(radians(${lat})) * cos(radians(a."latitude")) *
+          cos(radians(a."longitude") - radians(${lon})) +
+          sin(radians(${lat})) * sin(radians(a."latitude"))
+        ))
+      )
+    )`;
+
+    condicoes.push(Prisma.sql`${distanciaSql} <= ${raioKm}`);
+
+    if (query.tipo) {
+      const tipoArmazenado = tipoEstabelecimentoArmazenado(query.tipo);
+      condicoes.push(
+        Prisma.sql`translate(lower(t."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = translate(lower(${tipoArmazenado}), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO})`,
       );
     }
+
+    if (query.estado) {
+      condicoes.push(
+        Prisma.sql`lower(a."estado") = lower(${query.estado.trim()})`,
+      );
+    }
+
+    const texto = query.termo?.trim();
+    const cidade = query.cidade?.trim();
+    const especialidade = query.especialidade?.trim();
+    if (texto || cidade || especialidade) {
+      const idsTexto = await this.filtrarTexto({
+        texto,
+        cidade,
+        especialidade,
+      });
+      if (idsTexto.length === 0) {
+        return paginada([], 0, pagina, limite);
+      }
+      condicoes.push(Prisma.sql`e."id" IN (${Prisma.join(idsTexto)})`);
+    }
+
+    const whereClausula = Prisma.join(condicoes, ' AND ');
+
+    const contagem = await this.prisma.$queryRaw<
+      Array<{ total: bigint | number }>
+    >(
+      Prisma.sql`
+        SELECT COUNT(*)::int AS total
+        FROM "estabelecimentos" e
+        JOIN "enderecos" a ON a."id" = e."enderecoId"
+        JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
+        WHERE ${whereClausula}
+      `,
+    );
+
+    const total = Number(contagem[0]?.total ?? 0);
+    if (total === 0) {
+      return paginada([], 0, pagina, limite);
+    }
+
+    const matches = await this.prisma.$queryRaw<
+      Array<{ id: string; distancia: number }>
+    >(
+      Prisma.sql`
+        SELECT 
+          e."id",
+          ROUND((${distanciaSql})::numeric, 1)::float AS distancia
+        FROM "estabelecimentos" e
+        JOIN "enderecos" a ON a."id" = e."enderecoId"
+        JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
+        WHERE ${whereClausula}
+        ORDER BY distancia ASC, e."nome" ASC, e."id" ASC
+        LIMIT ${limite} OFFSET ${offset}
+      `,
+    );
+
+    const idsPagina = matches.map((m) => m.id);
+    const estabelecimentos = await this.prisma.estabelecimento.findMany({
+      where: { id: { in: idsPagina } },
+      include: estabelecimentoInclude,
+    });
+
+    const mapa = new Map(estabelecimentos.map((e) => [e.id, e]));
+
+    const dados = matches
+      .map((item) => {
+        const estab = mapa.get(item.id);
+        if (!estab) return null;
+        return this.toBuscaResponse(estab, item.distancia);
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return paginada(dados, total, pagina, limite);
   }
 
   private async filtrarTexto(filtros: {

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
+import { BuscaService } from '../src/busca/busca.service';
 
 jest.setTimeout(180000);
 
@@ -254,6 +255,35 @@ describe('Estabelecimentos (e2e)', () => {
     };
     expect(searchBody.paginacao.total).toBe(1);
     expect(searchBody.dados[0].id).toBe(unit.id);
+
+    // BE-28: Fallback relacional no PostgreSQL quando o Elasticsearch estiver indisponível
+    const buscaService = app.get(BuscaService);
+    const spyBuscarES = jest
+      .spyOn(buscaService, 'buscarEstabelecimentos')
+      .mockRejectedValueOnce(
+        new Error('Conexão recusada no cluster Elasticsearch'),
+      );
+
+    const fallbackResponse = await request(app.getHttpServer())
+      .get('/estabelecimentos')
+      .query({
+        lat: -8.0476,
+        lng: -34.877,
+        raioKm: 10,
+      })
+      .expect(200);
+
+    const fallbackBody = fallbackResponse.body as {
+      dados: Array<Estabelecimento & { distanciaKm?: number }>;
+      paginacao: { total: number };
+    };
+
+    expect(fallbackBody.paginacao.total).toBeGreaterThanOrEqual(1);
+    const itemEncontrado = fallbackBody.dados.find((d) => d.id === unit.id);
+    expect(itemEncontrado).toBeDefined();
+    expect(itemEncontrado?.distanciaKm).toBeDefined();
+    expect(typeof itemEncontrado?.distanciaKm).toBe('number');
+    expect(spyBuscarES).toHaveBeenCalled();
 
     await request(app.getHttpServer())
       .delete(`/estabelecimentos/${unit.id}`)

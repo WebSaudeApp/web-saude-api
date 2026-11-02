@@ -53,7 +53,7 @@ Os testes chamam os serviços diretamente, sem passar pelo controller ou pela ro
 | Última página parcial: 23 estabelecimentos, `limite=10` e `pagina=3` trazem 3 itens e 3 páginas | RN08, A3, A4, CA06     |
 | Busca geográfica por proximidade via Elasticsearch com cálculo de `distanciaKm` e ordenação     | BE-09, BE-10           |
 | Busca geográfica com filtros combinados (termo, tipo, especialidade, cidade/estado)              | BE-11                  |
-| Fallback seguro para SQL quando Elasticsearch falha ou está indisponível                         | BE-14                  |
+| Fallback seguro para SQL quando Elasticsearch falha ou está indisponível                         | BE-28                  |
 | Paginação para scroll infinito sem repetição de itens e com flag `temMais`                      | BE-13                  |
 
 `src/reviews/reviews.service.spec.ts`:
