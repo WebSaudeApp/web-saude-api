@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { sanitizarRotaLog } from './redact-log';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -16,19 +17,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const response = http.getResponse<Response>();
     const request = http.getRequest<Request>();
-    const path = request.originalUrl ?? request.url;
+    const rota = sanitizarRotaLog(request);
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       if (status >= 500) {
-        this.logger.error(`${request.method} ${path} ${status}`);
+        this.logger.error(`${request.method} ${rota} ${status}`);
       }
       response.status(status).json(exception.getResponse());
       return;
     }
 
     this.logger.error(
-      `${request.method} ${path} ${HttpStatus.INTERNAL_SERVER_ERROR}`,
+      `${request.method} ${rota} ${HttpStatus.INTERNAL_SERVER_ERROR}`,
     );
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
