@@ -9,6 +9,7 @@ import { validate } from './common/config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { DisponibilidadeModule } from './disponibilidade/disponibilidade.module';
 import { EstabelecimentosModule } from './estabelecimentos/estabelecimentos.module';
+import { EspecialidadesModule } from './especialidades/especialidades.module';
 import { BuscaModule } from './busca/busca.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { BuscaModule } from './busca/busca.module';
     BuscaModule,
     DisponibilidadeModule,
     EstabelecimentosModule,
+    EspecialidadesModule,
   ],
   providers: [
     {
