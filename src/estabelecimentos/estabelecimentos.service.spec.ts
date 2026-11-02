@@ -343,6 +343,36 @@ describe('EstabelecimentosService', () => {
     expect(result.dados).toHaveLength(1);
   });
 
+  it('garante paridade BE-30: busca no SQL usa unaccent e normaliza maiúsculas acentuadas e NFD', async () => {
+    queryRaw.mockResolvedValue([{ id: estabelecimento.id }]);
+    count.mockResolvedValue(1);
+    findMany.mockResolvedValue([estabelecimento]);
+
+    // String decomposta (NFD) com maiúsculas acentuadas
+    const cidadeNfd = 'SÃO JOSÉ'.normalize('NFD');
+    const termoNfd = 'CLÍNICA MÉDICA'.normalize('NFD');
+
+    const query = Object.assign(new BuscarEstabelecimentosDto(), {
+      termo: termoNfd,
+      cidade: cidadeNfd,
+    });
+
+    await service.search(query);
+
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    const sql = queryRaw.mock.calls[0][0];
+    const sqlTexto = sql.strings.join(' ');
+
+    // Deve usar a extensão unaccent e lower
+    expect(sqlTexto).toContain('unaccent(lower(');
+    expect(sqlTexto).not.toContain('translate(');
+
+    // Valores normalizados no JavaScript para NFC/sem diacríticos
+    expect(sql.values).toEqual(
+      expect.arrayContaining(['clinica medica', 'sao jose']),
+    );
+  });
+
   it('calcula a paginação na última página parcial com 23 itens (RN08, A3, A4, CA06)', async () => {
     count.mockResolvedValue(23);
     findMany.mockResolvedValue([

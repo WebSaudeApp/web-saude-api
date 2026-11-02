@@ -52,12 +52,9 @@ type EstabelecimentoCompleto = Prisma.EstabelecimentoGetPayload<{
 
 type Nota = { notaMedia: number; totalReviews: number };
 
-const CARACTERES_ACENTUADOS = 'áàâãäéèêëíìîïóòôõöúùûüç';
-const CARACTERES_SEM_ACENTO = 'aaaaaeeeeiiiiooooouuuuc';
-
 // Os tipos ficam gravados em maiúsculas: HOSPITAL e CLINICA (RN05).
 function tipoEstabelecimentoArmazenado(tipo: string): string {
-  return tipo.trim().toLocaleUpperCase('pt-BR');
+  return normalizarTexto(tipo).toUpperCase();
 }
 
 function normalizarTexto(texto: string): string {
@@ -236,7 +233,7 @@ export class EstabelecimentosService {
     if (query.tipo) {
       const tipoArmazenado = tipoEstabelecimentoArmazenado(query.tipo);
       condicoes.push(
-        Prisma.sql`translate(lower(t."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = translate(lower(${tipoArmazenado}), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO})`,
+        Prisma.sql`unaccent(lower(t."nome")) = unaccent(lower(${tipoArmazenado}))`,
       );
     }
 
@@ -333,21 +330,21 @@ export class EstabelecimentosService {
 
     if (textoNormalizado) {
       condicoes.push(Prisma.sql`(
-        strpos(translate(lower(e."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
-        OR strpos(translate(lower(a."cidade"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
-        OR strpos(translate(lower(a."bairro"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+        strpos(unaccent(lower(e."nome")), ${textoNormalizado}) > 0
+        OR strpos(unaccent(lower(a."cidade")), ${textoNormalizado}) > 0
+        OR strpos(unaccent(lower(a."bairro")), ${textoNormalizado}) > 0
         OR EXISTS (
           SELECT 1
           FROM "estabelecimento_especialidades" ee
           JOIN "especialidades" esp ON esp."id" = ee."especialidadeId"
           WHERE ee."estabelecimentoId" = e."id"
-            AND strpos(translate(lower(esp."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+            AND strpos(unaccent(lower(esp."nome")), ${textoNormalizado}) > 0
         )
       )`);
     }
     if (cidadeNormalizada) {
       condicoes.push(
-        Prisma.sql`translate(lower(a."cidade"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = ${cidadeNormalizada}`,
+        Prisma.sql`unaccent(lower(a."cidade")) = ${cidadeNormalizada}`,
       );
     }
     if (filtros.especialidade && especialidadeNormalizada) {
@@ -358,7 +355,7 @@ export class EstabelecimentosService {
         WHERE ee."estabelecimentoId" = e."id"
           AND (
             esp."id" = ${filtros.especialidade}
-            OR translate(lower(esp."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = ${especialidadeNormalizada}
+            OR unaccent(lower(esp."nome")) = ${especialidadeNormalizada}
           )
       )`);
     }

@@ -23,14 +23,6 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     },
     localizacao: { lat: -8.0641, lon: -34.8967 },
     especialidades: [{ id: 'esp-cardio', nome: 'Cardiologia' }],
-    horarios: [
-      {
-        diaSemana: 'SEGUNDA',
-        horaAbertura: '00:00',
-        horaFechamento: '23:59',
-        atende24h: true,
-      },
-    ],
     notaMedia: 4.8,
     totalReviews: 50,
   };
@@ -49,14 +41,6 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     },
     localizacao: { lat: -8.1258, lon: -34.903 },
     especialidades: [{ id: 'esp-dermato', nome: 'Dermatologia' }],
-    horarios: [
-      {
-        diaSemana: 'SEGUNDA',
-        horaAbertura: '08:00',
-        horaFechamento: '18:00',
-        atende24h: false,
-      },
-    ],
     notaMedia: 4.6,
     totalReviews: 30,
   };

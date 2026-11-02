@@ -190,7 +190,7 @@ export class BuscaService implements OnModuleInit {
     const filter: Record<string, unknown>[] = [];
     const sort: Record<string, unknown>[] = [];
 
-    // 1. Busca textual por termo (nome, cidade, bairro, logradouro e especialidades)
+    // 1. Busca textual por termo (RN03: nome, cidade, bairro e especialidades - sem logradouro e sem fuzziness)
     if (termo && termo.trim()) {
       const termoLimpo = termo.trim();
       must.push({
@@ -199,13 +199,7 @@ export class BuscaService implements OnModuleInit {
             {
               multi_match: {
                 query: termoLimpo,
-                fields: [
-                  'nome^3',
-                  'endereco.cidade^2',
-                  'endereco.bairro^2',
-                  'endereco.logradouro',
-                ],
-                fuzziness: 'AUTO',
+                fields: ['nome^3', 'endereco.cidade^2', 'endereco.bairro^2'],
               },
             },
             {
@@ -233,7 +227,7 @@ export class BuscaService implements OnModuleInit {
       });
     }
 
-    // 3. Filtro por especialidade (id ou nome)
+    // 3. Filtro por especialidade (RN06: id exato ou nome exato insensível a acento/case via keyword normalizado)
     if (especialidade && especialidade.trim()) {
       const espLimpa = especialidade.trim();
       filter.push({
@@ -243,7 +237,7 @@ export class BuscaService implements OnModuleInit {
             bool: {
               should: [
                 { term: { 'especialidades.id': espLimpa } },
-                { match: { 'especialidades.nome': espLimpa } },
+                { term: { 'especialidades.nome.keyword': espLimpa } },
               ],
             },
           },
@@ -251,11 +245,11 @@ export class BuscaService implements OnModuleInit {
       });
     }
 
-    // 4. Filtro por cidade
+    // 4. Filtro por cidade (RN02: nome completo exato insensível a acento/case via keyword normalizado)
     if (cidade && cidade.trim()) {
       filter.push({
-        match: {
-          'endereco.cidade': cidade.trim(),
+        term: {
+          'endereco.cidade.keyword': cidade.trim(),
         },
       });
     }

@@ -11,6 +11,12 @@ export const CONFIGURACAO_INDICE_ESTABELECIMENTOS = {
           filter: ['lowercase', 'asciifolding'],
         },
       },
+      normalizer: {
+        normalizador_exato: {
+          type: 'custom',
+          filter: ['lowercase', 'asciifolding'],
+        },
+      },
     },
   },
   mappings: {
@@ -43,7 +49,12 @@ export const CONFIGURACAO_INDICE_ESTABELECIMENTOS = {
           cidade: {
             type: 'text',
             analyzer: 'analisador_texto',
-            fields: { keyword: { type: 'keyword' } },
+            fields: {
+              keyword: {
+                type: 'keyword',
+                normalizer: 'normalizador_exato',
+              },
+            },
           },
           estado: { type: 'keyword' },
         },
@@ -58,17 +69,13 @@ export const CONFIGURACAO_INDICE_ESTABELECIMENTOS = {
           nome: {
             type: 'text',
             analyzer: 'analisador_texto',
-            fields: { keyword: { type: 'keyword' } },
+            fields: {
+              keyword: {
+                type: 'keyword',
+                normalizer: 'normalizador_exato',
+              },
+            },
           },
-        },
-      },
-      horarios: {
-        type: 'nested',
-        properties: {
-          diaSemana: { type: 'keyword' },
-          horaAbertura: { type: 'keyword' },
-          horaFechamento: { type: 'keyword' },
-          atende24h: { type: 'boolean' },
         },
       },
       notaMedia: { type: 'float' },

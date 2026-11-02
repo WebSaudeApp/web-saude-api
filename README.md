@@ -288,10 +288,11 @@ Exemplo de resposta **200 OK**:
 | `GET` | `/midias/:id` | pública | Detalhes de mídia específica |
 
 #### Parâmetros de Busca Geográfica (`GET /estabelecimentos`):
-- `termo`: texto livre em nome, cidade, bairro e especialidade (ignora acentos via `asciifolding`).
+- `termo`: texto livre em nome, cidade, bairro e especialidade (ignora acentos via `asciifolding` no ES e `unaccent` no PostgreSQL; não pesquisa logradouro e sem fuzziness).
 - `tipo`: tipo da unidade (`HOSPITAL` ou `CLINICA`).
-- `especialidade`: ID ou nome da especialidade.
-- `cidade` e `estado`: filtros textuais exatos ou parciais.
+- `especialidade`: ID ou nome exato da especialidade (insensível a acento/caixa).
+- `cidade`: nome completo exato da cidade (insensível a acento/caixa).
+- `estado`: sigla da UF (2 letras).
 - `lat` e `lng`: coordenadas de geolocalização do usuário (ex: `-5.09194`, `-42.80336`).
 - `raioKm`: raio de alcance em quilômetros (padrão `10`, máximo `50`).
 - `pagina` e `limite`: controle de paginação (padrão `1` e `20`).

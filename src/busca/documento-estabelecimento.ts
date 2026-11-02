@@ -24,12 +24,6 @@ export interface DocumentoEstabelecimento {
     id: string;
     nome: string;
   }>;
-  horarios?: Array<{
-    diaSemana: string;
-    horaAbertura: string;
-    horaFechamento: string;
-    atende24h: boolean;
-  }>;
   notaMedia?: number;
   totalReviews?: number;
 }
@@ -55,12 +49,6 @@ export interface DadosEstabelecimentoParaIndexacao {
   especialidades?: Array<{
     id: string;
     nome: string;
-  }>;
-  horarios?: Array<{
-    diaSemana: string;
-    horaAbertura: string;
-    horaFechamento: string;
-    atende24h: boolean;
   }>;
   notaMedia?: number;
   totalReviews?: number;
@@ -92,12 +80,6 @@ export function mapearEstabelecimentoParaDocumento(
     especialidades: (dados.especialidades ?? []).map((esp) => ({
       id: esp.id,
       nome: esp.nome,
-    })),
-    horarios: (dados.horarios ?? []).map((h) => ({
-      diaSemana: h.diaSemana,
-      horaAbertura: h.horaAbertura,
-      horaFechamento: h.horaFechamento,
-      atende24h: h.atende24h,
     })),
     notaMedia: dados.notaMedia ?? 0,
     totalReviews: dados.totalReviews ?? 0,

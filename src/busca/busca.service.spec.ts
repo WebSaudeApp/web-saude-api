@@ -26,14 +26,6 @@ describe('BuscaService', () => {
       lon: -34.877,
     },
     especialidades: [{ id: 'esp-1', nome: 'Cardiologia' }],
-    horarios: [
-      {
-        diaSemana: 'SEGUNDA',
-        horaAbertura: '08:00',
-        horaFechamento: '18:00',
-        atende24h: false,
-      },
-    ],
     notaMedia: 4.8,
     totalReviews: 25,
   };
@@ -505,7 +497,17 @@ describe('BuscaService', () => {
       expect(queryBool.must).toHaveLength(1);
       const mustClause = queryBool.must[0].bool.should;
       expect(mustClause[0].multi_match?.query).toBe('esperança');
-      expect(mustClause[0].multi_match?.fields).toContain('nome^3');
+      expect(mustClause[0].multi_match?.fields).toEqual([
+        'nome^3',
+        'endereco.cidade^2',
+        'endereco.bairro^2',
+      ]);
+      expect(mustClause[0].multi_match?.fields).not.toContain(
+        'endereco.logradouro',
+      );
+      expect(
+        (mustClause[0].multi_match as Record<string, unknown>)?.fuzziness,
+      ).toBeUndefined();
       expect(mustClause[1].nested?.path).toBe('especialidades');
 
       // Filter: tipo, especialidade, cidade, estado, geo_distance
@@ -524,7 +526,7 @@ describe('BuscaService', () => {
             bool: {
               should: [
                 { term: { 'especialidades.id': 'Cardiologia' } },
-                { match: { 'especialidades.nome': 'Cardiologia' } },
+                { term: { 'especialidades.nome.keyword': 'Cardiologia' } },
               ],
             },
           },
@@ -533,7 +535,7 @@ describe('BuscaService', () => {
 
       // Cidade
       expect(queryBool.filter).toContainEqual({
-        match: { 'endereco.cidade': 'Recife' },
+        term: { 'endereco.cidade.keyword': 'Recife' },
       });
 
       // Estado convertido para uppercase (PE)
@@ -557,6 +559,112 @@ describe('BuscaService', () => {
       expect(chamada.sort[0]._geo_distance?.unit).toBe('km');
       expect(chamada.sort[1]).toEqual({ 'nome.keyword': { order: 'asc' } });
       expect(chamada.sort[2]).toEqual({ id: { order: 'asc' } });
+    });
+
+    it('garante paridade BE-30: termo sem fuzziness e sem logradouro no multi_match', async () => {
+      const elasticsearchMock = {
+        search: jest.fn().mockResolvedValue({
+          hits: { total: { value: 0 }, hits: [] },
+        }),
+      };
+
+      const service = new BuscaService(
+        elasticsearchMock as unknown as ElasticsearchService,
+      );
+
+      await service.buscarEstabelecimentos({
+        termo: 'Rua das Flores',
+      });
+
+      const chamada = (
+        elasticsearchMock.search.mock.calls[0] as Array<{
+          query: {
+            bool: {
+              must: Array<{
+                bool: {
+                  should: Array<{
+                    multi_match?: { fields: string[]; fuzziness?: string };
+                  }>;
+                };
+              }>;
+            };
+          };
+        }>
+      )[0];
+
+      const multiMatch = chamada.query.bool.must[0].bool.should[0].multi_match;
+      expect(multiMatch?.fields).toEqual([
+        'nome^3',
+        'endereco.cidade^2',
+        'endereco.bairro^2',
+      ]);
+      expect(multiMatch?.fields).not.toContain('endereco.logradouro');
+      expect(multiMatch?.fuzziness).toBeUndefined();
+    });
+
+    it('garante paridade BE-30: filtro de cidade e especialidade usam term exato em keyword com normalizador', async () => {
+      const elasticsearchMock = {
+        search: jest.fn().mockResolvedValue({
+          hits: { total: { value: 0 }, hits: [] },
+        }),
+      };
+
+      const service = new BuscaService(
+        elasticsearchMock as unknown as ElasticsearchService,
+      );
+
+      await service.buscarEstabelecimentos({
+        cidade: 'São José',
+        especialidade: 'Clínica',
+      });
+
+      const chamada = (
+        elasticsearchMock.search.mock.calls[0] as Array<{
+          query: {
+            bool: {
+              filter: unknown[];
+            };
+          };
+        }>
+      )[0];
+
+      // Cidade exata com term em keyword
+      expect(chamada.query.bool.filter).toContainEqual({
+        term: { 'endereco.cidade.keyword': 'São José' },
+      });
+
+      // Especialidade exata com term em keyword
+      expect(chamada.query.bool.filter).toContainEqual({
+        nested: {
+          path: 'especialidades',
+          query: {
+            bool: {
+              should: [
+                { term: { 'especialidades.id': 'Clínica' } },
+                { term: { 'especialidades.nome.keyword': 'Clínica' } },
+              ],
+            },
+          },
+        },
+      });
+    });
+
+    it('garante BE-30 (8d): índice não contém horarios e define normalizador_exato', () => {
+      expect(
+        (
+          CONFIGURACAO_INDICE_ESTABELECIMENTOS.mappings.properties as Record<
+            string,
+            unknown
+          >
+        ).horarios,
+      ).toBeUndefined();
+      expect(
+        CONFIGURACAO_INDICE_ESTABELECIMENTOS.settings.analysis.normalizer
+          .normalizador_exato,
+      ).toEqual({
+        type: 'custom',
+        filter: ['lowercase', 'asciifolding'],
+      });
     });
   });
 });
