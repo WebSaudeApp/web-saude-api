@@ -87,6 +87,21 @@ export class BuscaService implements OnModuleInit {
 
     const existeAlias = await this.aliasExiste(alias);
     if (!existeAlias) {
+      // Se houver um índice físico acidentalmente criado com o nome do alias, remove-o
+      const existeIndiceComNomeDoAlias = await this.indiceExiste(alias);
+      if (existeIndiceComNomeDoAlias && alias !== indice) {
+        this.logger.warn(
+          `Detectado índice físico com nome do alias "${alias}". Removendo para apontar como alias...`,
+        );
+        try {
+          await this.elasticsearchService.indices.delete({ index: alias });
+        } catch (erroDelete) {
+          this.logger.warn(
+            `Não foi possível remover índice físico "${alias}": ${String(erroDelete)}`,
+          );
+        }
+      }
+
       this.logger.log(`Apontando alias ${alias} para o índice ${indice}...`);
       await this.elasticsearchService.indices.putAlias({
         index: indice,

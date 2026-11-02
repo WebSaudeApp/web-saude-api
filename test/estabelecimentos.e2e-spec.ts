@@ -59,6 +59,11 @@ describe('Estabelecimentos (e2e)', () => {
       update: {},
       create: { nome: 'CLINICA' },
     });
+
+    const buscaService = app.get(BuscaService);
+    if (await buscaService.estaDisponivel()) {
+      await buscaService.inicializarIndice();
+    }
   });
 
   afterAll(async () => {
