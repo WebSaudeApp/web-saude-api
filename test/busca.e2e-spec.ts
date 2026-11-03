@@ -3,14 +3,17 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { BuscaService } from '../src/busca/busca.service';
+import { ALIAS_ESTABELECIMENTOS } from '../src/busca/constantes';
 import { DocumentoEstabelecimento } from '../src/busca/documento-estabelecimento';
 
 describe('Busca (e2e / Integração Elasticsearch)', () => {
   let app: INestApplication;
   let buscaService: BuscaService;
 
+  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
   const docEsperanca: DocumentoEstabelecimento = {
-    id: 'teste-es-recife-1',
+    id: `teste-es-recife-1-${runId}`,
     nome: 'Hospital Esperança Recife',
     tipo: { id: 'tipo-hosp', nome: 'HOSPITAL' },
     endereco: {
@@ -28,7 +31,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
   };
 
   const docClinica: DocumentoEstabelecimento = {
-    id: 'teste-es-recife-2',
+    id: `teste-es-recife-2-${runId}`,
     nome: 'Clínica de Saúde Boa Viagem',
     tipo: { id: 'tipo-clin', nome: 'CLINICA' },
     endereco: {
@@ -46,7 +49,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
   };
 
   const docCaruaru: DocumentoEstabelecimento = {
-    id: 'teste-es-caruaru-1',
+    id: `teste-es-caruaru-1-${runId}`,
     nome: 'Hospital Regional do Agreste',
     tipo: { id: 'tipo-hosp', nome: 'HOSPITAL' },
     endereco: {
@@ -92,15 +95,20 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
 
     // Dá refresh no índice para disponibilidade imediata das consultas
     const cliente = buscaService.obterCliente();
-    await cliente.indices.refresh({ index: 'estabelecimentos' });
+    await cliente.indices.refresh({ index: ALIAS_ESTABELECIMENTOS });
   }, 30000);
 
   afterAll(async () => {
     // Limpeza dos documentos de teste
     if (buscaService) {
-      await buscaService.removerEstabelecimento(docEsperanca.id);
-      await buscaService.removerEstabelecimento(docClinica.id);
-      await buscaService.removerEstabelecimento(docCaruaru.id);
+      await buscaService
+        .removerEstabelecimento(docEsperanca.id)
+        .catch(() => {});
+      await buscaService.removerEstabelecimento(docClinica.id).catch(() => {});
+      await buscaService.removerEstabelecimento(docCaruaru.id).catch(() => {});
+      await buscaService
+        .removerEstabelecimento(`teste-sinc-1-${runId}`)
+        .catch(() => {});
     }
     if (app) {
       await app.close();
@@ -285,7 +293,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
   describe('Sincronização com o Banco de Dados (BE-15)', () => {
     it('cadastra/atualiza estabelecimento no índice e reflete nas buscas', async () => {
       const docNovo: DocumentoEstabelecimento = {
-        id: 'teste-sinc-1',
+        id: `teste-sinc-1-${runId}`,
         nome: 'Posto de Saúde Santo Amaro',
         tipo: { id: 'tipo-posto', nome: 'POSTO' },
         endereco: {
@@ -302,7 +310,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
       await buscaService.indexarEstabelecimento(docNovo);
       await buscaService
         .obterCliente()
-        .indices.refresh({ index: 'estabelecimentos' });
+        .indices.refresh({ index: ALIAS_ESTABELECIMENTOS });
 
       const busca = await buscaService.buscarEstabelecimentos({
         termo: 'Santo Amaro',
@@ -322,7 +330,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
       await buscaService.indexarEstabelecimento(docAtualizado);
       await buscaService
         .obterCliente()
-        .indices.refresh({ index: 'estabelecimentos' });
+        .indices.refresh({ index: ALIAS_ESTABELECIMENTOS });
 
       const buscaEditado = await buscaService.buscarEstabelecimentos({
         termo: 'Pediatria',
@@ -334,7 +342,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
       await buscaService.removerEstabelecimento(docNovo.id);
       await buscaService
         .obterCliente()
-        .indices.refresh({ index: 'estabelecimentos' });
+        .indices.refresh({ index: ALIAS_ESTABELECIMENTOS });
 
       const docExcluido = await buscaService.obterEstabelecimentoPorId(
         docNovo.id,

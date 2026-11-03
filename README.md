@@ -455,21 +455,29 @@ web-saude-api/
 ## Testes
 
 ```bash
+# Testes unitários
 npm test
+
+# Testes E2E (requer Docker com PostgreSQL e Elasticsearch rodando localmente)
+docker compose up -d
 npm run test:e2e
 ```
 
-Na FASE 7 já há:
+### Isolamento e Segurança dos Testes (QA-07)
 
-- unitários extras (tokens, redação de logs, fluxo do gestor)
-- E2E de auth, unidades, paciente, gestor e admin
-- GitHub Actions (lint, migrate, unit, e2e, build) em todo push/PR para `main`
-- log HTTP (método, rota, status, duração) sem senha/JWT
-- dump operacional em `backups/` (`npm run backup`)
+Para evitar vazamento ou corrupção acidental de dados de produção/homologação (ex.: instâncias remotas no Supabase ou Elastic Cloud):
 
-2FA e notificações in-app ficam como endurecimento futuro.
+1. **Guarda de Segurança (`test/guard-test-env.ts`)**:
+   - É executada antes de qualquer teste carregar os módulos.
+   - Bloqueia a inicialização de testes caso `DATABASE_URL` ou `ELASTICSEARCH_NODE` apontem para um host não-local (apenas `localhost`, `127.0.0.1`, `::1`, `postgres` ou `elasticsearch` são autorizados por padrão).
+   - Para ignorar a proteção intencionalmente, defina a variável `ALLOW_REMOTE_TEST_DATABASE=true`.
 
-Variáveis mínimas para os testes estão em `test/setup-env.ts`.
+2. **Isolamento de Documentos e Índices**:
+   - As suítes E2E utilizam geradores dinâmicos de ID para evitar conflitos de chave ou colisão entre execuções concorrentes.
+   - O alias e o índice do Elasticsearch podem ser sobrescritos via `ELASTICSEARCH_ALIAS_ESTABELECIMENTOS` e `ELASTICSEARCH_INDEX_ESTABELECIMENTOS`.
+   - Limpeza simétrica em blocos `afterAll` limpa tanto as tabelas do PostgreSQL quanto os documentos correspondentes no Elasticsearch.
+
+Variáveis mínimas padrão para os testes estão centralizadas em `test/setup-env.ts`.
 
 ---
 
