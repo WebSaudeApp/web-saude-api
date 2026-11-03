@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/http/app-throttler.guard';
 import { AllExceptionsFilter } from './common/http/all-exceptions.filter';
 import { RequestLoggingInterceptor } from './common/http/request-logging.interceptor';
 import { CommonModule } from './common/common.module';
@@ -47,7 +48,7 @@ import { BuscaModule } from './busca/busca.module';
     },
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: AppThrottlerGuard,
     },
   ],
 })
