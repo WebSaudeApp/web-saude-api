@@ -171,10 +171,13 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     expect(idsRetornados).not.toContain(docCaruaru.id);
 
     // Valida que a distância calculada está presente e ordenada
-    const distancias = resultadoRaio10Km.itens.map(
-      (item) => item.distanciaKm ?? 0,
+    expect(resultadoRaio10Km.itens[0].distanciaKm).toBeDefined();
+    expect(resultadoRaio10Km.itens[1].distanciaKm).toBeDefined();
+    expect(resultadoRaio10Km.itens[0].distanciaKm).toBeLessThan(
+      resultadoRaio10Km.itens[1].distanciaKm!,
     );
-    expect(distancias[0]).toBeLessThanOrEqual(distancias[1]);
+    expect(resultadoRaio10Km.itens[0].estabelecimento.id).toBe(docEsperanca.id);
+    expect(resultadoRaio10Km.itens[1].estabelecimento.id).toBe(docClinica.id);
   });
 
   it('Critério 3 (raio reduzido): consulta com raio de 5 km devolve apenas o hospital mais próximo', async () => {
@@ -325,6 +328,14 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
         docNovo.id,
       );
       expect(docExcluido).toBeNull();
+
+      const buscaAposExclusao = await buscaService.buscarEstabelecimentos({
+        termo: 'Santo Amaro',
+      });
+      const idsAposExclusao = buscaAposExclusao.itens.map(
+        (i) => i.estabelecimento.id,
+      );
+      expect(idsAposExclusao).not.toContain(docNovo.id);
     });
   });
 });
