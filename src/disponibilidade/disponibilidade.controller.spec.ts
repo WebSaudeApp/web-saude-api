@@ -35,9 +35,15 @@ describe('DisponibilidadeController', () => {
       busca as unknown as BuscaService,
     );
 
-    await expect(controller.verificar()).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    const promessa = controller.verificar();
+    await expect(promessa).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(promessa).rejects.toMatchObject({
+      response: {
+        status: 'erro',
+        banco: 'desconectado',
+        elasticsearch: 'conectado',
+      },
+    });
   });
 
   it('lança 503 quando o elasticsearch está indisponível', async () => {
@@ -52,22 +58,21 @@ describe('DisponibilidadeController', () => {
       busca as unknown as BuscaService,
     );
 
-    await expect(controller.verificar()).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    const promessa = controller.verificar();
+    await expect(promessa).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(promessa).rejects.toMatchObject({
+      response: {
+        status: 'erro',
+        banco: 'conectado',
+        elasticsearch: 'desconectado',
+      },
+    });
   });
 
   it('retorna mensagem api online na rota raiz', () => {
-    const prisma = {
-      isDatabaseConnected: jest.fn(),
-    };
-    const busca = {
-      estaDisponivel: jest.fn(),
-    };
-    const controller = new DisponibilidadeController(
-      prisma as unknown as PrismaService,
-      busca as unknown as BuscaService,
-    );
+    const prisma = {} as PrismaService;
+    const busca = {} as BuscaService;
+    const controller = new DisponibilidadeController(prisma, busca);
 
     expect(controller.raiz()).toEqual({ mensagem: 'api online' });
   });

@@ -13,6 +13,21 @@ describe('EstabelecimentosService', () => {
   const findMany = jest.fn<(args: unknown) => Promise<unknown[]>>(() =>
     Promise.resolve([]),
   );
+  const createEstabelecimento = jest.fn<(args: unknown) => Promise<unknown>>(
+    () => Promise.resolve({ id: 'estabelecimento-1' }),
+  );
+  const updateEstabelecimento = jest.fn<(args: unknown) => Promise<unknown>>(
+    () => Promise.resolve({ id: 'estabelecimento-1' }),
+  );
+  const deleteEstabelecimento = jest.fn<(args: unknown) => Promise<unknown>>(
+    () => Promise.resolve({ id: 'estabelecimento-1' }),
+  );
+  const deleteEndereco = jest.fn<(args: unknown) => Promise<unknown>>(() =>
+    Promise.resolve({ id: 'endereco-1' }),
+  );
+  const findFirstTipo = jest.fn<(args: unknown) => Promise<unknown>>(() =>
+    Promise.resolve({ id: 'tipo-1', nome: 'HOSPITAL' }),
+  );
   const findUnique = jest.fn<(args: unknown) => Promise<unknown>>(() =>
     Promise.resolve(null),
   );
@@ -20,7 +35,20 @@ describe('EstabelecimentosService', () => {
     (query: Prisma.Sql) => Promise<Array<{ id: string }>>
   >(() => Promise.resolve([]));
   const prisma = {
-    estabelecimento: { count, findMany, findUnique },
+    estabelecimento: {
+      count,
+      findMany,
+      findUnique,
+      create: createEstabelecimento,
+      update: updateEstabelecimento,
+      delete: deleteEstabelecimento,
+    },
+    endereco: {
+      delete: deleteEndereco,
+    },
+    tipoEstabelecimento: {
+      findFirst: findFirstTipo,
+    },
     especialidade: { count: jest.fn(() => Promise.resolve(1)) },
     $queryRaw: queryRaw,
     $transaction: jest.fn((operations: Promise<unknown>[]) =>
@@ -92,10 +120,26 @@ describe('EstabelecimentosService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    count.mockResolvedValue(0);
-    findMany.mockResolvedValue([]);
-    queryRaw.mockResolvedValue([]);
-    findUnique.mockResolvedValue(null);
+    count.mockReset().mockResolvedValue(0);
+    findMany.mockReset().mockResolvedValue([]);
+    queryRaw.mockReset().mockResolvedValue([]);
+    findUnique.mockReset().mockResolvedValue(null);
+    createEstabelecimento
+      .mockReset()
+      .mockResolvedValue({ id: 'estabelecimento-1' });
+    updateEstabelecimento
+      .mockReset()
+      .mockResolvedValue({ id: 'estabelecimento-1' });
+    deleteEstabelecimento
+      .mockReset()
+      .mockResolvedValue({ id: 'estabelecimento-1' });
+    deleteEndereco.mockReset().mockResolvedValue({ id: 'endereco-1' });
+    findFirstTipo
+      .mockReset()
+      .mockResolvedValue({ id: 'tipo-1', nome: 'HOSPITAL' });
+    indexarEstabelecimento.mockReset().mockResolvedValue(undefined);
+    removerEstabelecimento.mockReset().mockResolvedValue(undefined);
+    buscarEstabelecimentos.mockReset();
   });
 
   it('devolve o resultado com a paginação padrão e os campos dos models (RN07, RN08, RN11)', async () => {
@@ -401,6 +445,61 @@ describe('EstabelecimentosService', () => {
       total: 23,
       totalPaginas: 3,
       temMais: false,
+    });
+  });
+
+  describe('Sincronização no Ciclo de Vida: create, update e remove (BE-15 / QA-06)', () => {
+    it('executa indexação no Elasticsearch ao criar estabelecimento (create)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.create({
+        nome: 'Novo Hospital',
+        tipo: 'HOSPITAL',
+        endereco: {
+          logradouro: 'Rua das Flores',
+          numero: '123',
+          bairro: 'Centro',
+          cidade: 'Recife',
+          estado: 'PE',
+          cep: '50000-000',
+          latitude: -8.05,
+          longitude: -34.88,
+        },
+      });
+
+      expect(createEstabelecimento).toHaveBeenCalledTimes(1);
+      expect(indexarEstabelecimento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: estabelecimento.id,
+          nome: estabelecimento.nome,
+        }),
+      );
+    });
+
+    it('executa reindexação no Elasticsearch ao atualizar estabelecimento (update)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.update(estabelecimento.id, {
+        nome: 'Hospital Atualizado',
+      });
+
+      expect(updateEstabelecimento).toHaveBeenCalledTimes(1);
+      expect(indexarEstabelecimento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: estabelecimento.id,
+        }),
+      );
+    });
+
+    it('executa remoção no Elasticsearch ao remover estabelecimento (remove)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.remove(estabelecimento.id);
+
+      expect(deleteEstabelecimento).toHaveBeenCalledWith({
+        where: { id: estabelecimento.id },
+      });
+      expect(removerEstabelecimento).toHaveBeenCalledWith(estabelecimento.id);
     });
   });
 

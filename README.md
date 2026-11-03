@@ -409,9 +409,15 @@ web-saude-api/
 - **ValidationPipe** — `whitelist`, `forbidNonWhitelisted`, `transform`
 - **Secrets** — somente no `.env`, nunca no código
 
-O que **nunca** deve ir para logs: senha, JWT, refresh token, código de e-mail, token de recuperação, connection string.
+### Privacidade e Anonimização de Logs (LGPD — BE-31)
 
-Cada request autenticado ou público gera uma linha `METHOD /path status duração`. Corpos e headers sensíveis não são logados. Erros 500 vão para o logger sem stack na resposta HTTP.
+- O que **nunca** deve ir para logs: dados de geolocalização (`lat`, `lng`), termos de busca, especialidades, senhas, tokens JWT, códigos de recuperação e connection strings.
+- **Formato dos logs:** Cada request gera uma linha com `MÉTODO /caminho [nomes_parametros] status duração` (ex.: `GET /estabelecimentos [especialidade,lat,lng,termo] 200 12ms`). Registra-se apenas a rota e os **nomes** dos parâmetros recebidos na query, **nunca seus valores**, protegendo a privacidade e localização do visitante conforme a LGPD.
+- Corpos e headers sensíveis não são logados. Erros 500 e 503 vão para o logger sem dados de requisição nem stack trace na resposta HTTP.
+
+#### Retenção de Logs na Hospedagem
+- **Ambiente de Teste (Render):** O Render retém os logs de execução da aplicação por **7 dias** no plano padrão.
+- **Ambiente de Produção (Hospedagem definitiva):** Retenção máxima de logs operacionais configurada para **7 a 30 dias** com rotação automática, respeitando o princípio de minimização de dados e armazenamento da LGPD.
 
 ---
 

@@ -364,8 +364,10 @@ export class BuscaService implements OnModuleInit {
         totalPaginas: Math.ceil(totalHits / size),
       };
     } catch (erro) {
+      const mensagemErro =
+        erro instanceof Error ? erro.message : 'Falha na consulta';
       this.logger.error(
-        `Erro ao buscar estabelecimentos no Elasticsearch: ${String(erro)}`,
+        `Erro ao buscar estabelecimentos no Elasticsearch: ${mensagemErro}`,
       );
       throw erro;
     }

@@ -300,4 +300,48 @@ describe('Estabelecimentos (e2e)', () => {
       await prisma.endereco.count({ where: { id: unit.endereco.id } }),
     ).toBe(0);
   }, 180000);
+
+  describe('Validações HTTP da Query de Estabelecimentos (ValidationPipe - QA-06 #57)', () => {
+    it('rejeita latitude fora dos limites (-90 a 90) com 400', async () => {
+      await request(app.getHttpServer())
+        .get('/estabelecimentos')
+        .query({ lat: 95, lng: -34.88 })
+        .expect(400);
+    });
+
+    it('rejeita longitude fora dos limites (-180 a 180) com 400', async () => {
+      await request(app.getHttpServer())
+        .get('/estabelecimentos')
+        .query({ lat: -8.05, lng: 185 })
+        .expect(400);
+    });
+
+    it('rejeita raioKm maior que 50 km com 400 (se @Max(50) for removido este teste falha)', async () => {
+      await request(app.getHttpServer())
+        .get('/estabelecimentos')
+        .query({ lat: -8.05, lng: -34.88, raioKm: 55 })
+        .expect(400);
+    });
+
+    it('rejeita lat sem lng com 400', async () => {
+      await request(app.getHttpServer())
+        .get('/estabelecimentos')
+        .query({ lat: -8.05 })
+        .expect(400);
+    });
+
+    it('rejeita raioKm sem coordenadas com 400', async () => {
+      await request(app.getHttpServer())
+        .get('/estabelecimentos')
+        .query({ raioKm: 25 })
+        .expect(400);
+    });
+
+    it('rejeita parâmetros não reconhecidos com 400 (whitelist)', async () => {
+      await request(app.getHttpServer())
+        .get('/estabelecimentos')
+        .query({ parametroInexistente: 'invalido' })
+        .expect(400);
+    });
+  });
 });
