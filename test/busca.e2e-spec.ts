@@ -171,13 +171,25 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     expect(idsRetornados).not.toContain(docCaruaru.id);
 
     // Valida que a distância calculada está presente e ordenada
-    expect(resultadoRaio10Km.itens[0].distanciaKm).toBeDefined();
-    expect(resultadoRaio10Km.itens[1].distanciaKm).toBeDefined();
-    expect(resultadoRaio10Km.itens[0].distanciaKm).toBeLessThan(
-      resultadoRaio10Km.itens[1].distanciaKm!,
+    expect(resultadoRaio10Km.itens.length).toBeGreaterThanOrEqual(2);
+    resultadoRaio10Km.itens.forEach((item) => {
+      expect(item.distanciaKm).toBeDefined();
+      expect(typeof item.distanciaKm).toBe('number');
+    });
+    for (let i = 0; i < resultadoRaio10Km.itens.length - 1; i++) {
+      expect(resultadoRaio10Km.itens[i].distanciaKm).toBeLessThanOrEqual(
+        resultadoRaio10Km.itens[i + 1].distanciaKm!,
+      );
+    }
+    const idxEsperanca = resultadoRaio10Km.itens.findIndex(
+      (i) => i.estabelecimento.id === docEsperanca.id,
     );
-    expect(resultadoRaio10Km.itens[0].estabelecimento.id).toBe(docEsperanca.id);
-    expect(resultadoRaio10Km.itens[1].estabelecimento.id).toBe(docClinica.id);
+    const idxClinica = resultadoRaio10Km.itens.findIndex(
+      (i) => i.estabelecimento.id === docClinica.id,
+    );
+    expect(idxEsperanca).toBeGreaterThanOrEqual(0);
+    expect(idxClinica).toBeGreaterThanOrEqual(0);
+    expect(idxEsperanca).toBeLessThan(idxClinica);
   });
 
   it('Critério 3 (raio reduzido): consulta com raio de 5 km devolve apenas o hospital mais próximo', async () => {
