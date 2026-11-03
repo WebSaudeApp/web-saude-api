@@ -459,16 +459,20 @@ Variáveis mínimas para os testes estão em `test/setup-env.ts`.
 
 ## CI/CD
 
-Workflow: `.github/workflows/ci.yml`.
+[![CI](https://github.com/WebSaudeApp/web-saude-api/actions/workflows/ci.yml/badge.svg)](https://github.com/WebSaudeApp/web-saude-api/actions/workflows/ci.yml)
 
-Em cada push e pull request para `main`:
+Gatilhos e execução detalhados em [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-1. Sobe PostgreSQL 16
-2. `npm ci`
-3. `npm run lint:ci`
-4. `npx prisma migrate deploy`
-5. `npm test` e `npm run test:e2e`
-6. `npm run build`
+A esteira de integração contínua executa automaticamente em cada `push` e `pull_request` para `main` e `producao`, cobrindo dois jobs:
+1. **Qualidade (`quality`)**: verificação estrita de linter (`lint:ci`), aplicação de migrations em banco novo, suíte de testes unitários (`test`), testes E2E com PostgreSQL e Elasticsearch (`test:e2e`) e compilação do build (`build`).
+2. **Upgrade de Migrations (`upgrade-migrations` — QA-05)**: validação de compatibilidade retroativa de banco de dados, aplicando as migrations sobre um banco pré-existente e populado com a versão anterior para garantir zero colisões de tipos/tabelas e zero drift com o `schema.prisma`.
+
+### Proteção da Branch `producao` (D15)
+
+Para garantir estabilidade no ambiente de produção:
+- **Bloqueio de push direto**: alterações só são promovidas via Pull Request.
+- **Checagens obrigatórias do CI**: a PR só pode ser mergeada se os jobs `quality` e `upgrade-migrations` estiverem ambos verdes.
+- **Revisão de código obrigatória**: exigência de pelo menos 1 aprovação formal de code review antes do merge.
 
 Deploy na Render continua por `autoDeploy` no `render.yaml`. A imagem Docker aplica `prisma migrate deploy` na subida.
 
