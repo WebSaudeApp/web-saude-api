@@ -336,7 +336,8 @@ Exemplo de resposta **200 OK**:
 O `/docs` **não usa Swagger UI**. É um portal no visual do Web Saúde: header, cards, papéis e login com e-mail/senha.
 
 - Local: [http://localhost:3000/docs](http://localhost:3000/docs)
-- Produção: [https://web-saude-api.onrender.com/docs](https://web-saude-api.onrender.com/docs)
+- Teste / Staging (Render): [https://web-saude-api.onrender.com/docs](https://web-saude-api.onrender.com/docs)
+- Produção: Hospedagem paga definitiva (alimentada exclusivamente pela branch `producao`)
 
 Arquivos: `docs-assets/index.html`, `app.css`, `app.js`. A spec OpenAPI continua em `/docs-json` para ferramentas.
 
@@ -469,6 +470,11 @@ Em cada push e pull request para `main`:
 4. `npx prisma migrate deploy`
 5. `npm test` e `npm run test:e2e`
 6. `npm run build`
+
+### Primeiro Deploy em Produção (BE-33)
+
+O procedimento operacional padrão, checklist de variáveis, marco zero de banco de dados (`pg_dump`), carga inicial do Elasticsearch e testes de fumaça estão documentados detalhadamente em:
+- 📖 [Runbook: Primeiro Deploy na Hospedagem Paga](docs/runbooks/primeiro-deploy-producao.md)
 
 Deploy na Render continua por `autoDeploy` no `render.yaml`. A imagem Docker aplica `prisma migrate deploy` na subida.
 
