@@ -4,7 +4,6 @@ import type { Request, Response } from 'express';
 import { join } from 'path';
 
 export function setupSwagger(app: INestApplication): void {
-  const isProduction = process.env.NODE_ENV === 'production';
   const builder = new DocumentBuilder()
     .setTitle('Web Saúde API')
     .setDescription(
@@ -12,15 +11,16 @@ export function setupSwagger(app: INestApplication): void {
     )
     .setVersion('0.1.0');
 
-  if (isProduction) {
-    builder
-      .addServer('https://web-saude-api.onrender.com', 'Produção')
-      .addServer('http://localhost:3000', 'Local');
-  } else {
-    builder
-      .addServer('http://localhost:3000', 'Local')
-      .addServer('https://web-saude-api.onrender.com', 'Produção');
+  const prodUrl = process.env.PRODUCTION_URL;
+  if (prodUrl) {
+    builder.addServer(prodUrl, 'Produção (Hospedagem Definitiva)');
   }
+  builder
+    .addServer(
+      'https://web-saude-api.onrender.com',
+      'Ambiente de Teste (Render)',
+    )
+    .addServer('http://localhost:3000', 'Ambiente Local (Desenvolvimento)');
 
   const config = builder
     .addTag(
