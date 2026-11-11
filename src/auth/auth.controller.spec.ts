@@ -9,6 +9,7 @@ describe('AuthController', () => {
   let authService: {
     register: jest.Mock;
     login: jest.Mock;
+    loginComGoogle: jest.Mock;
   };
 
   const mockResponse = {
@@ -36,6 +37,7 @@ describe('AuthController', () => {
     authService = {
       register: jest.fn().mockResolvedValue(mockResponse),
       login: jest.fn().mockResolvedValue(mockResponse),
+      loginComGoogle: jest.fn().mockResolvedValue(mockResponse),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -70,6 +72,19 @@ describe('AuthController', () => {
 
     const res = await controller.login(dto, mockReq);
     expect(authService.login).toHaveBeenCalledWith(
+      dto,
+      expect.objectContaining({ ip: '127.0.0.1', userAgent: 'Jest-Test' }),
+    );
+    expect(res).toEqual(mockResponse);
+  });
+
+  it('deve chamar o authService.loginComGoogle com DTO e metadados', async () => {
+    const dto = {
+      idToken: 'google-mock-id-token',
+    };
+
+    const res = await controller.loginComGoogle(dto, mockReq);
+    expect(authService.loginComGoogle).toHaveBeenCalledWith(
       dto,
       expect.objectContaining({ ip: '127.0.0.1', userAgent: 'Jest-Test' }),
     );

@@ -78,7 +78,8 @@ model Usuario {
   id           String        @id @default(uuid())
   nome         String
   email        String        @unique
-  senhaHash    String
+  senhaHash    String?
+  googleId     String?       @unique
   telefone     String?
   cpf          String?       @unique
   papel        PapelUsuario  @default(PACIENTE)
@@ -91,6 +92,7 @@ model Usuario {
   estabelecimentos Estabelecimento[] @relation("GestorEstabelecimentos")
 
   @@index([email])
+  @@index([googleId])
   @@map("usuarios")
 }
 

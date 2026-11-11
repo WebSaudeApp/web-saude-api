@@ -10,6 +10,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -74,5 +75,32 @@ export class AuthController {
       userAgent: req.headers['user-agent'],
     };
     return this.authService.login(dto, meta);
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Autenticar ou cadastrar com Google OAuth',
+    description:
+      'Valida o idToken emitido pelo Google, cria a conta (se for o primeiro acesso) ou vincula à conta existente, e retorna os tokens de autenticação da aplicação.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Autenticação com Google realizada com sucesso.',
+    type: AuthTokensDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Token do Google inválido ou conta inativa.',
+  })
+  async loginComGoogle(
+    @Body() dto: GoogleLoginDto,
+    @Req() req: Request,
+  ): Promise<AuthTokensDto> {
+    const meta = {
+      ip: req.ip || req.socket.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+    return this.authService.loginComGoogle(dto, meta);
   }
 }

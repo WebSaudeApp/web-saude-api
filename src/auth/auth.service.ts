@@ -8,8 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PapelUsuario, StatusUsuario, Usuario } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../database/prisma.service';
 import { AuthTokensDto, paraUsuarioResposta } from './dto/auth-tokens.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import {
@@ -32,11 +34,15 @@ export interface MetadadosRequisicao {
 
 @Injectable()
 export class AuthService {
+  private readonly googleClient: OAuth2Client;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    this.googleClient = new OAuth2Client();
+  }
 
   async register(
     dto: RegisterDto,
@@ -87,11 +93,13 @@ export class AuthService {
       where: { email },
     });
 
-    // Se o usuário não existe ou está inativo/desativado, executamos compare fictício para evitar timing attack
+    // Se o usuário não existe, está inativo, desativado ou não possui senha (ex: conta Google),
+    // executamos compare fictício para mitigar timing attack e retornamos erro padronizado.
     if (
       !usuario ||
       usuario.status !== StatusUsuario.ATIVO ||
-      usuario.desativadoEm !== null
+      usuario.desativadoEm !== null ||
+      !usuario.senhaHash
     ) {
       await bcrypt.compare(dto.senha, HASH_DUMMY);
       throw new UnauthorizedException(ERRO_CREDENCIAS_INVALIDAS);
@@ -100,6 +108,85 @@ export class AuthService {
     const senhaValida = await bcrypt.compare(dto.senha, usuario.senhaHash);
     if (!senhaValida) {
       throw new UnauthorizedException(ERRO_CREDENCIAS_INVALIDAS);
+    }
+
+    return this.gerarSessaoETokens(usuario, meta);
+  }
+
+  async loginComGoogle(
+    dto: GoogleLoginDto,
+    meta: MetadadosRequisicao = {},
+  ): Promise<AuthTokensDto> {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!googleClientId) {
+      throw new BadRequestException(
+        'Autenticação com Google não está configurada no servidor.',
+      );
+    }
+
+    let payload;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: dto.idToken,
+        audience: googleClientId,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('Token do Google inválido ou expirado.');
+    }
+
+    if (!payload || !payload.email || !payload.sub) {
+      throw new UnauthorizedException(
+        'Token do Google não contém dados de identificação.',
+      );
+    }
+
+    if (!payload.email_verified) {
+      throw new UnauthorizedException(
+        'O e-mail do Google precisa estar verificado.',
+      );
+    }
+
+    const email = payload.email.toLowerCase().trim();
+    const googleId = payload.sub;
+    const nome = payload.name || payload.given_name || email.split('@')[0];
+
+    // 1. Procurar se já existe usuário por googleId ou email
+    let usuario = await this.prisma.usuario.findFirst({
+      where: {
+        OR: [{ googleId }, { email }],
+      },
+    });
+
+    if (usuario) {
+      if (
+        usuario.status !== StatusUsuario.ATIVO ||
+        usuario.desativadoEm !== null
+      ) {
+        throw new UnauthorizedException(
+          'Esta conta de usuário está inativa ou desativada.',
+        );
+      }
+
+      // Se o usuário já existia por email mas ainda não tinha o googleId vinculado
+      if (!usuario.googleId) {
+        usuario = await this.prisma.usuario.update({
+          where: { id: usuario.id },
+          data: { googleId },
+        });
+      }
+    } else {
+      // 2. Se for novo usuário, cria conta social com papel PACIENTE
+      usuario = await this.prisma.usuario.create({
+        data: {
+          nome: nome.trim(),
+          email,
+          googleId,
+          senhaHash: null,
+          papel: PapelUsuario.PACIENTE,
+          status: StatusUsuario.ATIVO,
+        },
+      });
     }
 
     return this.gerarSessaoETokens(usuario, meta);
