@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { plainToInstance, Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -70,12 +71,48 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   ELASTICSEARCH_API_KEY?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_ACCESS_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_SECRET!: string;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.length > 0 ? value : '15m',
+  )
+  @IsString()
+  @IsNotEmpty()
+  JWT_ACCESS_EXPIRES!: string;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.length > 0 ? value : '7d',
+  )
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_EXPIRES!: string;
 }
 
 export function validate(
   config: Record<string, unknown>,
 ): EnvironmentVariables {
-  const validated = plainToInstance(EnvironmentVariables, config, {
+  const mergedConfig = { ...config };
+  if (!mergedConfig.JWT_ACCESS_SECRET) {
+    mergedConfig.JWT_ACCESS_SECRET = randomBytes(32).toString('hex');
+  }
+  if (!mergedConfig.JWT_REFRESH_SECRET) {
+    mergedConfig.JWT_REFRESH_SECRET = randomBytes(32).toString('hex');
+  }
+  if (!mergedConfig.JWT_ACCESS_EXPIRES) {
+    mergedConfig.JWT_ACCESS_EXPIRES = '15m';
+  }
+  if (!mergedConfig.JWT_REFRESH_EXPIRES) {
+    mergedConfig.JWT_REFRESH_EXPIRES = '7d';
+  }
+
+  const validated = plainToInstance(EnvironmentVariables, mergedConfig, {
     enableImplicitConversion: false,
   });
 

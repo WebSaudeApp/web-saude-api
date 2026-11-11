@@ -11,6 +11,7 @@ import { DisponibilidadeModule } from './disponibilidade/disponibilidade.module'
 import { EstabelecimentosModule } from './estabelecimentos/estabelecimentos.module';
 import { EspecialidadesModule } from './especialidades/especialidades.module';
 import { BuscaModule } from './busca/busca.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { BuscaModule } from './busca/busca.module';
     DisponibilidadeModule,
     EstabelecimentosModule,
     EspecialidadesModule,
+    AuthModule,
   ],
   providers: [
     {

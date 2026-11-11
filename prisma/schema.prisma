@@ -31,6 +31,19 @@ enum DiaSemana {
   SABADO
 }
 
+enum PapelUsuario {
+  PACIENTE
+  GESTOR
+  ADMINISTRADOR
+}
+
+enum StatusUsuario {
+  ATIVO
+  PENDENTE
+  SUSPENSO
+  INATIVO
+}
+
 model TipoEstabelecimento {
   id   String @id @default(uuid())
   nome String @unique
@@ -41,11 +54,14 @@ model TipoEstabelecimento {
 }
 
 model Estabelecimento {
-  id         String @id @default(uuid())
+  id         String  @id @default(uuid())
   nome       String
+  descricao  String?
   tipoId     String
-  enderecoId String @unique
+  enderecoId String  @unique
+  gestorId   String?
 
+  gestor         Usuario?                       @relation("GestorEstabelecimentos", fields: [gestorId], references: [id], onDelete: SetNull)
   tipo           TipoEstabelecimento            @relation(fields: [tipoId], references: [id])
   endereco       Endereco                       @relation(fields: [enderecoId], references: [id])
   contatos       Contato[]
@@ -54,7 +70,44 @@ model Estabelecimento {
   midias         Midia[]
 
   @@index([tipoId])
+  @@index([gestorId])
   @@map("estabelecimentos")
+}
+
+model Usuario {
+  id           String        @id @default(uuid())
+  nome         String
+  email        String        @unique
+  senhaHash    String
+  telefone     String?
+  cpf          String?       @unique
+  papel        PapelUsuario  @default(PACIENTE)
+  status       StatusUsuario @default(ATIVO)
+  criadoEm     DateTime      @default(now())
+  atualizadoEm DateTime      @updatedAt
+  desativadoEm DateTime?
+
+  sessoes          Sessao[]
+  estabelecimentos Estabelecimento[] @relation("GestorEstabelecimentos")
+
+  @@index([email])
+  @@map("usuarios")
+}
+
+model Sessao {
+  id         String    @id @default(uuid())
+  usuarioId  String
+  tokenHash  String    @unique
+  ip         String?
+  userAgent  String?
+  expiraEm   DateTime
+  revogadoEm DateTime?
+  criadoEm   DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("sessoes")
 }
 
 model Especialidade {
