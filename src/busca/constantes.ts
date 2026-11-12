@@ -1,5 +1,7 @@
-export const ALIAS_ESTABELECIMENTOS = 'estabelecimentos';
-export const INDICE_ESTABELECIMENTOS_PADRAO = 'estabelecimentos_v1';
+export const ALIAS_ESTABELECIMENTOS =
+  process.env.ELASTICSEARCH_ALIAS_ESTABELECIMENTOS || 'estabelecimentos';
+export const INDICE_ESTABELECIMENTOS_PADRAO =
+  process.env.ELASTICSEARCH_INDEX_ESTABELECIMENTOS || 'estabelecimentos_v1';
 
 export const CONFIGURACAO_INDICE_ESTABELECIMENTOS = {
   settings: {
