@@ -406,6 +406,16 @@ web-saude-api/
 - **Helmet** — headers HTTP
 - **CORS** — lista explícita em `CORS_ORIGINS`; `*` bloqueado em produção
 - **Rate limit** — 100 requisições / 60s por IP (ajustável). Endpoints de auth terão limite mais restrito na FASE 2
+
+### Rate Limiting e Topologia de Proxy (BE-34 #59)
+
+- **Topologia de Requisição:** `Visitante → Servidor Front-end (Next.js / proxy /api/*) → API NestJS (Backend)`.
+- **Isolamento de Visitantes:** Para evitar que múltiplos visitantes compartilhem um único balde de requisições atrás do servidor de front ou do balanceador de carga, a API utiliza o `AppThrottlerGuard` com Express configurado para `trust proxy`.
+- **Segurança contra Spoofing de IP:**
+  - O front-end repassa o IP de origem do visitante no cabeçalho `X-Forwarded-For` juntamente com o cabeçalho de autenticação interna `X-Frontend-Proxy-Secret`.
+  - A API valida o `X-Frontend-Proxy-Secret` contra a variável de ambiente `FRONTEND_PROXY_SECRET`.
+  - Havendo correspondência, o limite de requisições é rastreado por visitante real (`proxy:<client_ip>`).
+  - Em requisições diretas ou sem o segredo compartilhado, a API utiliza o IP físico da conexão TCP (`direct:<socket_ip>`), garantindo que clientes maliciosos não forjem `X-Forwarded-For` para burlar o limite.
 - **ValidationPipe** — `whitelist`, `forbidNonWhitelisted`, `transform`
 - **Secrets** — somente no `.env`, nunca no código
 

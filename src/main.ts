@@ -47,6 +47,16 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
+  const trustProxy = configService.get<string>('TRUST_PROXY', '1');
+  app.set(
+    'trust proxy',
+    trustProxy === 'true'
+      ? true
+      : isNaN(Number(trustProxy))
+        ? trustProxy
+        : Number(trustProxy),
+  );
+
   const swaggerEnabled = configService.get<boolean>('SWAGGER_ENABLED', false);
 
   if (swaggerEnabled) {
