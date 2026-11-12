@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main, producao, 'feat/**']
   pull_request:
-    branches: [main]
+    branches: [main, producao]
 
 jobs:
   quality:
+    name: Qualidade (Lint, Testes e Build)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -58,3 +59,37 @@ jobs:
       - run: npm test
       - run: npm run test:e2e
       - run: npm run build
+
+  upgrade-migrations:
+    name: Upgrade de Migrations (Compatibilidade com release anterior)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: websaude_upgrade
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d websaude_upgrade"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/websaude_upgrade
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5433/websaude_upgrade
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Executar validação de upgrade de migrations
+        run: node scripts/ci-test-migration-upgrade.js
