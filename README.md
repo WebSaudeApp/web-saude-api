@@ -465,12 +465,12 @@ Gatilhos e execução detalhados em [`.github/workflows/ci.yml`](.github/workflo
 
 A esteira de integração contínua executa automaticamente em cada `push` e `pull_request` para `main` e `producao`, cobrindo dois jobs:
 1. **Qualidade (`quality`)**: verificação estrita de linter (`lint:ci`), aplicação de migrations em banco novo, suíte de testes unitários (`test`), testes E2E com PostgreSQL e Elasticsearch (`test:e2e`) e compilação do build (`build`).
-2. **Upgrade de Migrations (`upgrade-migrations` — QA-05)**: validação de compatibilidade retroativa de banco de dados, aplicando as migrations sobre um banco pré-existente e populado com a versão anterior para garantir zero colisões de tipos/tabelas e zero drift com o `schema.prisma`.
+2. **Upgrade de Migrations (`upgrade-migrations` — QA-05, só em PR/push para `producao`)**: validação de compatibilidade retroativa de banco de dados, exigindo que as migrations já publicadas em `origin/producao` continuem idênticas (imutabilidade), aplicando-as num banco populado e depois as novas, com zero drift. Um marco zero deliberado (squash) exige `ALLOW_MARCO_ZERO=true` (variável do repositório), registrado no PR.
 
 ### Proteção da Branch `producao` (D15)
 
 Para garantir estabilidade no ambiente de produção:
-- **Bloqueio de push direto**: alterações só são promovidas via Pull Request.
+- **Bloqueio de push direto** *(configuração do GitHub em Settings → Branches, aplicada pelo admin do repositório; não vem do código)*: alterações só são promovidas via Pull Request.
 - **Checagens obrigatórias do CI**: a PR só pode ser mergeada se os jobs `quality` e `upgrade-migrations` estiverem ambos verdes.
 - **Revisão de código obrigatória**: exigência de pelo menos 1 aprovação formal de code review antes do merge.
 

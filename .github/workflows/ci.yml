@@ -61,6 +61,8 @@ jobs:
       - run: npm run build
 
   upgrade-migrations:
+    # Roda em PRs para producao e em pushes na producao (protecao do QA-05).
+    if: github.base_ref == 'producao' || github.ref == 'refs/heads/producao'
     name: Upgrade de Migrations (Compatibilidade com release anterior)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -92,4 +94,6 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Executar validação de upgrade de migrations
+        env:
+          ALLOW_MARCO_ZERO: ${{ vars.ALLOW_MARCO_ZERO }}
         run: node scripts/ci-test-migration-upgrade.js

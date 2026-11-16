@@ -31,36 +31,53 @@ async function main() {
     process.exit(1);
   }
 
-  // 1. Determinar o commit de referência base
-  // Por padrão usa origin/producao. Se não existir ou for legado sem o marco zero, usa o commit inicial do marco zero (607c4db).
-  let baseRef = process.env.MIGRATION_BASE_REF || 'origin/producao';
+  // 1. Ref base = ultima release (origin/producao). Sem fallback silencioso: se nao der
+  //    para obter a base, o job FALHA (um teste que nao consegue falhar nao protege nada).
+  const baseRef = process.env.MIGRATION_BASE_REF || 'origin/producao';
+  run('git fetch origin producao');
+  const migrationsDir = 'prisma/migrations';
 
-  // Garante que refs remotas estejam disponíveis
-  try {
-    run('git fetch origin producao --depth=10');
-  } catch (e) {
-    console.warn('Aviso: Não foi possível fazer fetch de origin/producao:', e.message);
+  const baseDirs = runOutput(`git ls-tree --name-only ${baseRef} ${migrationsDir}/`)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.endsWith('migration_lock.toml') && !l.endsWith('.gitkeep'));
+  if (baseDirs.length === 0) {
+    throw new Error(`Nenhuma migration encontrada em ${baseRef}; base invalida.`);
   }
 
-  const forceLegacy = process.env.FORCE_LEGACY_PRODUCAO === 'true';
-
-  let hasInitInBase = false;
-  try {
-    const list = runOutput(`git ls-tree ${baseRef} prisma/migrations/20261027120000_init_estabelecimentos`);
-    if (list) hasInitInBase = true;
-  } catch {
-    hasInitInBase = false;
+  // 1.1 Imutabilidade: toda migration da release deve existir identica no codigo atual.
+  //     Squash/edicao de migration ja aplicada exige marco zero deliberado (runbook BE-33).
+  const normalizar = (t) => t.replace(/\r\n/g, '\n').trim();
+  const alteradas = [];
+  for (const dir of baseDirs) {
+    const arquivo = `${dir}/migration.sql`;
+    let baseSql;
+    try {
+      baseSql = runOutput(`git show ${baseRef}:${arquivo}`);
+    } catch {
+      continue;
+    }
+    const atualPath = path.join(process.cwd(), arquivo);
+    const atualSql = fs.existsSync(atualPath) ? fs.readFileSync(atualPath, 'utf-8') : null;
+    if (atualSql === null || normalizar(atualSql) !== normalizar(baseSql)) {
+      alteradas.push(dir);
+    }
   }
-
-  if (!hasInitInBase && !forceLegacy) {
-    console.log(
-      `A branch ${baseRef} ainda não possui o marco zero (20261027120000_init_estabelecimentos). ` +
-      `Utilizando commit do marco zero (607c4db) como base para teste de upgrade aditivo.`
+  if (alteradas.length > 0) {
+    if (process.env.ALLOW_MARCO_ZERO === 'true') {
+      console.warn(
+        `AVISO: ${alteradas.length} migration(s) da release foram removidas/alteradas, mas ALLOW_MARCO_ZERO=true ` +
+          '(marco zero deliberado). Pulando o teste de upgrade; registre a decisao no PR.',
+      );
+      return;
+    }
+    throw new Error(
+      `Migrations ja publicadas em ${baseRef} foram removidas ou alteradas (migration aplicada e imutavel):\n  ` +
+        alteradas.join('\n  ') +
+        '\nSe for um marco zero deliberado (dump + reset + registro), defina ALLOW_MARCO_ZERO=true.',
     );
-    baseRef = '607c4db';
-  } else {
-    console.log(`Utilizando ref base: ${baseRef}`);
   }
+  console.log(`Utilizando ref base: ${baseRef} (${baseDirs.length} migrations, todas preservadas)`);
 
   // 2. Criar diretório temporário para extrair as migrations da base
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prisma-base-'));
@@ -101,12 +118,9 @@ async function main() {
     const tempSqlFile = path.join(tempDir, 'seed.sql');
     fs.writeFileSync(tempSqlFile, sqlSeed, 'utf-8');
 
-    try {
-      run(`npx prisma db execute --file=${tempSqlFile} --schema=${baseSchemaPath}`);
-      console.log('Dados mínimos inseridos com sucesso.');
-    } catch (err) {
-      console.warn('Aviso ao inserir seed da base (pode ser schema antigo):', err.message);
-    }
+    // Falha do seed derruba o job: nao pode passar em silencio.
+    run(`npx prisma db execute --file=${tempSqlFile} --schema=${baseSchemaPath}`);
+    console.log('Dados minimos inseridos com sucesso.');
 
     console.log('\n--- Passo 4: Aplicando as migrations atuais da PR sobre o banco já existente ---');
     run('npx prisma migrate deploy');
