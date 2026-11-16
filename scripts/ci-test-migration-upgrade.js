@@ -22,6 +22,13 @@ function runOutput(cmd, options = {}) {
   return execSync(cmd, { encoding: 'utf-8', ...options }).trim();
 }
 
+function verificarDrift() {
+  console.log('\n--- Verificando drift entre o banco migrado e prisma/schema.prisma ---');
+  run(
+    'npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-schema-datasource prisma/schema.prisma --exit-code',
+  );
+}
+
 async function main() {
   console.log('=== [QA-05] Iniciando Verificação de Upgrade de Migrations ===');
 
@@ -63,6 +70,7 @@ async function main() {
       alteradas.push(dir);
     }
   }
+  let marcoZero = false;
   if (alteradas.length > 0) {
     // O bypass vale apenas para a release (SHA) informada: assim ele expira sozinho quando
     // a producao receber o marco zero e nunca vira um desligamento permanente do teste.
@@ -70,15 +78,29 @@ async function main() {
     if (process.env.ALLOW_MARCO_ZERO_FOR === baseSha) {
       console.warn(
         `AVISO: ${alteradas.length} migration(s) da release foram removidas/alteradas, mas ALLOW_MARCO_ZERO_FOR=${baseSha} ` +
-          '(marco zero deliberado para esta release). Pulando o teste de upgrade; registre a decisao no PR.',
+          '(marco zero deliberado para esta release). Pulando so o upgrade a partir da base; ' +
+          'as migrations atuais ainda sao aplicadas num banco vazio e o drift e verificado.',
       );
-      return;
+      marcoZero = true;
+    } else {
+      throw new Error(
+        `Migrations ja publicadas em ${baseRef} foram removidas ou alteradas (migration aplicada e imutavel):\n  ` +
+          alteradas.join('\n  ') +
+          '\nSe for um marco zero deliberado (dump + reset + registro), defina ALLOW_MARCO_ZERO_FOR=<sha de ' +
+          baseRef +
+          '> (valido so para esta release).',
+      );
     }
-    throw new Error(
-      `Migrations ja publicadas em ${baseRef} foram removidas ou alteradas (migration aplicada e imutavel):\n  ` +
-        alteradas.join('\n  ') +
-        '\nSe for um marco zero deliberado (dump + reset + registro), defina ALLOW_MARCO_ZERO_FOR=<sha de ' + baseRef + '> (valido so para esta release).',
-    );
+  }
+
+  if (marcoZero) {
+    // Marco zero: nao ha upgrade a testar, mas as migrations atuais ainda precisam subir num
+    // banco vazio e bater com o schema.prisma.
+    console.log('\n--- Marco zero: aplicando as migrations atuais num banco vazio ---');
+    run('npx prisma migrate deploy');
+    verificarDrift();
+    console.log('\n✅ [QA-05] Marco zero: migrations aplicadas em banco vazio, zero drift.');
+    return;
   }
   console.log(`Utilizando ref base: ${baseRef} (${baseDirs.length} migrations, todas preservadas)`);
 
@@ -102,36 +124,21 @@ async function main() {
 
     console.log('\n--- Passo 3: Inserindo dados mínimos de teste no banco da base ---');
     // Insere registros mínimos para garantir que migrations aditivas não quebrem tabelas com dados
-    const sqlSeed = `
-      INSERT INTO "tipos_estabelecimento" ("id", "nome")
-      VALUES ('11111111-1111-4111-8111-111111111111', 'HOSPITAL')
-      ON CONFLICT ("nome") DO NOTHING;
-
-      INSERT INTO "enderecos" ("id", "cep", "logradouro", "numero", "bairro", "cidade", "estado", "latitude", "longitude")
-      VALUES ('end-upgrade-seed-1', '50000-000', 'Av. Teste Upgrade', '100', 'Centro', 'Recife', 'PE', -8.05, -34.88)
-      ON CONFLICT ("id") DO NOTHING;
-
-      INSERT INTO "estabelecimentos" ("id", "nome", "tipoId", "enderecoId")
-      VALUES (
-        'est-upgrade-seed-1',
-        'Unidade Teste Upgrade',
-        (SELECT "id" FROM "tipos_estabelecimento" WHERE "nome" = 'HOSPITAL'),
-        'end-upgrade-seed-1'
-      )
-      ON CONFLICT ("id") DO NOTHING;
-    `;
-    const tempSqlFile = path.join(tempDir, 'seed.sql');
-    fs.writeFileSync(tempSqlFile, sqlSeed, 'utf-8');
-
+    // O seed vem da PROPRIA release base, para sempre casar com o schema dela.
+    const seedBase = path.join(tempPrismaDir, 'ci', 'seed-upgrade.sql');
+    if (!fs.existsSync(seedBase)) {
+      throw new Error(
+        `prisma/ci/seed-upgrade.sql nao existe em ${baseRef}; sem dados na base o upgrade nao prova nada.`,
+      );
+    }
     // Falha do seed derruba o job: nao pode passar em silencio.
-    run(`npx prisma db execute --file=${tempSqlFile} --schema=${baseSchemaPath}`);
+    run(`npx prisma db execute --file=${seedBase} --schema=${baseSchemaPath}`);
     console.log('Dados minimos inseridos com sucesso.');
 
     console.log('\n--- Passo 4: Aplicando as migrations atuais da PR sobre o banco já existente ---');
     run('npx prisma migrate deploy');
 
-    console.log('\n--- Passo 5: Verificando drift entre o banco migrado e prisma/schema.prisma ---');
-    run('npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-schema-datasource prisma/schema.prisma --exit-code');
+    verificarDrift();
 
     console.log('\n✅ [QA-05] Verificação de upgrade concluída com sucesso: zero colisões e zero drift!');
   } finally {
