@@ -21,11 +21,11 @@ Antes de iniciar o deploy em produção, todas as issues bloqueantes devem estar
 | Issue | Requisito | Como Verificar |
 | :--- | :--- | :--- |
 | **#37** | Módulo `/especialidades` ativo e funcional | `GET /especialidades` retorna lista de especialidades cadastradas (status 200). |
-| **#38** | Health check desacoplado | `GET /health` responde 200 se o PostgreSQL estiver ativo, sem derrubar a API se apenas o cluster de busca oscilar. |
-| **BE-31 (#53)** | Higienização de logs (LGPD) | Requisições com `lat`, `lng`, `raioKm` geram logs mascarados com `[REDACTED]`. |
+| **#38** | Health check desacoplado | `GET /health` responde 200 se o PostgreSQL estiver ativo (o corpo informa `elasticsearch: desconectado`, sem mudar o status HTTP). Conferir parando o ES e chamando `/health`. |
+| **BE-31 (#53)** | Higienização de logs (LGPD) | Uma busca com `lat`, `lng` e `termo` gera log só com os **nomes** dos parâmetros (ex.: `GET /estabelecimentos [lat,lng,termo] 200 12ms`), nunca os valores. |
 | **BE-34 (#59)** | Rate limit com anti-spoofing | Cabeçalho `X-Frontend-Proxy-Secret` compartilhado entre frontend e backend para validar `X-Forwarded-For`. |
-| **QA-05 (#56)** | CI de upgrade de migrations | PR para `producao` executou o job `upgrade` com sucesso no GitHub Actions. |
-| **QA-07 (#58)** | Isolamento de testes | `setup-env.ts` configurado para impedir testes automatizados contra instâncias de produção. |
+| **QA-05 (#56)** | CI de upgrade de migrations | PR para `producao` executou o job `upgrade-migrations` com sucesso no GitHub Actions. |
+| **QA-07 (#58)** | Isolamento de testes | A guarda `guard-test-env` bloqueia testes contra banco ou ES remotos. |
 
 ---
 
@@ -71,29 +71,46 @@ ELASTICSEARCH_API_KEY="[CHAVE-DE-API-DO-ELASTICSEARCH]"
 
 ## 4. Procedimento de Marco Zero no Banco de Dados (Decisão D4)
 
-> ⚠️ **REGRA DE OURO:** Uma migration aplicada num banco em que não é possível dar reset torna-se **imutável**. O squash inicial de migrations é legítimo se for deliberado, documentado e com dump prévio.
+> ⚠️ **REGRA DE OURO:** Uma migration aplicada num banco em que não é possível dar reset torna-se **imutável**. O squash inicial de migrations é legítimo se for deliberado, documentado e com dump prévio. **A partir do primeiro dado real, só migrations novas, para frente.**
 
-### Passo 4.1: Backup Completo (pg_dump)
-Antes de executar qualquer instrução no banco de produção:
+### Passo 4.0: Saber o estado do banco antes de qualquer coisa
+A migration `20261027120000_init_estabelecimentos` cria tudo do zero (sem `IF NOT EXISTS`). Num banco que já tem as 11 migrations antigas ela falha com `type "TipoContato" already exists`, e a migration falhada trava os deploys seguintes (`P3009`) até um `prisma migrate resolve` manual.
+
+```sql
+SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations ORDER BY started_at;
+```
+- **Banco vazio** (produção nova): vá direto ao 4.2.
+- **Banco com as migrations antigas** (ex.: o banco de teste): faça o reset do 4.1 antes do 4.2.
+
+> **Evidência pendente (registrar no PR #28 antes do aceite):** o Render sobe o `607c4db` com sucesso, mas o `_prisma_migrations` do banco de teste só tem as migrations antigas. Anexar o log do deploy desse commit e o campo *Docker Command* do painel do Render. Hoje o `CMD` do Dockerfile **não executa `migrate deploy`** (commit `0be2145`): em qualquer hospedagem, a migration é um passo **manual** deste runbook.
+
+### Passo 4.1: Backup e reset (só se o banco já tiver histórico)
 ```bash
 pg_dump -h [HOST_BANCO] -U postgres -d postgres -F c -b -v -f "backup_marco_zero_$(date +%Y%m%d_%H%M%S).dump"
 ```
-*Armazene o arquivo gerado em local externo e seguro (ex.: bucket S3 com criptografia).*
+*Guarde o arquivo em local externo e seguro.* Depois do dump, zere o schema (apaga tudo, inclusive `_prisma_migrations`):
+```sql
+DROP SCHEMA public CASCADE; CREATE SCHEMA public;
+```
+Se o banco for gerenciado (ex.: Supabase), prefira recriar o projeto/banco em vez de dropar o schema `public`, para não perder extensões e permissões.
 
-### Passo 4.2: Aplicação das Migrations
-Conecte-se com a variável `DIRECT_URL` (modo sessão) e execute a esteira de migrações:
+### Passo 4.2: Aplicação das migrations
+Com `DIRECT_URL` (modo sessão):
 ```bash
 npx prisma migrate deploy
 ```
 
-### Passo 4.3: Validação da Tabela de Migrations
-Acesse o banco via `psql` e certifique-se de que a migration inicial foi registrada com sucesso:
+### Passo 4.3: Validação da tabela de migrations
 ```sql
-SELECT migration_name, finished_at, rolled_back_at 
-FROM _prisma_migrations 
-ORDER BY started_at DESC;
+SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations ORDER BY started_at DESC;
 ```
-*Critério: Todas as linhas devem possuir `finished_at` preenchido e `rolled_back_at` nulo.*
+*Critério: todas as linhas com `finished_at` preenchido e `rolled_back_at` nulo.*
+
+### Passo 4.4: Repor os dados de teste
+Se houve reset, repor os dados necessários (o seed de `tipos_estabelecimento` já vem na migration). Os dados dos módulos removidos (usuários, avaliações) ficam só no dump.
+
+### Passo 4.5: Registro
+Registrar no PR/ADR: "squash pré-lançamento; daqui em diante, migrations aplicadas são imutáveis".
 
 ---
 
@@ -105,7 +122,7 @@ O contêiner da aplicação não executa reindexação automática no boot para 
 ```bash
 npm run es:init
 ```
-*Garante a criação do índice `estabelecimentos_v1` com analisador `asciifolding`, campos `geo_point` e vinculação do alias `estabelecimentos`.*
+*Garante a criação do índice `estabelecimentos_v1` com analisador `asciifolding` e normalizador `lowercase` + `asciifolding`, campos `geo_point` e vinculação do alias `estabelecimentos`.*
 
 ### Passo 5.2: Reindexação dos Dados Relacionais
 ```bash
@@ -148,7 +165,6 @@ curl -i "https://[URL_PRODUCAO]/estabelecimentos?lat=-8.0631&lng=-34.8711&raioKm
 # Esperado: HTTP 200 OK com itens ordenados por distanciaKm
 ```
 
-*(Você também pode executar o script automatizado `node scripts/smoke-test-deploy.js https://[URL_PRODUCAO]`)*.
 
 ---
 

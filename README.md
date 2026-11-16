@@ -177,8 +177,8 @@ Todas as variáveis abaixo são **obrigatórias**. A API não sobe se alguma est
 | `DIRECT_URL` | connection string de sessão (porta `5432`) | Prisma Migrate e DDL |
 | `THROTTLE_TTL_MS` | `60000` | Janela do rate limit, em milissegundos |
 | `THROTTLE_LIMIT` | `100` | Máximo de requisições por IP na janela |
-| `SWAGGER_ENABLED` | `true` | Painel em `/docs`. `true` em desenvolvimento e na Render atual |
-| `ELASTICSEARCH_NODE` | `http://localhost:9200` | URL do cluster Elasticsearch (opcional, padrão `http://localhost:9200`) |
+| `SWAGGER_ENABLED` | `true` | Painel em `/docs`. `true` em desenvolvimento e no ambiente de teste (Render) |
+| `ELASTICSEARCH_NODE` | `http://localhost:9200` | URL do cluster Elasticsearch. **Obrigatória**: a API não sobe sem ela, e não há valor padrão |
 | `ELASTICSEARCH_USERNAME` | `elastic` | Usuário para autenticação básica no Elasticsearch (opcional) |
 | `ELASTICSEARCH_PASSWORD` | `sua-senha` | Senha para autenticação básica no Elasticsearch (opcional) |
 | `ELASTICSEARCH_API_KEY` | `chave-api-base64` | Chave de API para Elastic Cloud (opcional) |
@@ -280,7 +280,7 @@ Exemplo de resposta **200 OK**:
 | `GET` | `/estabelecimentos/:id` | pública | Detalhes completos da unidade (endereço, horários, especialidades, fotos) |
 | `POST` | `/estabelecimentos` | pública | Cadastra novo estabelecimento de saúde |
 | `PATCH` | `/estabelecimentos/:id` | pública | Edição parcial dos dados da unidade |
-| `DELETE` | `/estabelecimentos/:id` | pública | Exclusão lógica da unidade |
+| `DELETE` | `/estabelecimentos/:id` | pública | Exclusão definitiva (apaga também endereço, contatos, horários, mídias e vínculos de especialidade) |
 | `PUT` | `/estabelecimentos/:id/especialidades` | pública | Vincula especialidades atendidas |
 | `PUT` | `/estabelecimentos/:id/horarios` | pública | Define quadro de horários de funcionamento |
 | `POST` | `/estabelecimentos/:id/midias` | pública | Upload de fotos (JPG/PNG/WEBP até 5MB) |
@@ -311,9 +311,7 @@ Exemplo de resposta **200 OK**:
         "latitude": -7.07897,
         "longitude": -41.46825
       },
-      "distanciaKm": 1.2,
-      "notaMedia": 4.5,
-      "totalReviews": 12
+      "distanciaKm": 1.2
     }
   ],
   "paginacao": {
@@ -331,12 +329,22 @@ Exemplo de resposta **200 OK**:
 
 ---
 
+### Ambientes
+
+| Ambiente | API | Front | Branch | Dados |
+| --- | --- | --- | --- | --- |
+| Local | `localhost:3000` | `localhost` | qualquer | descartáveis |
+| Teste | Render | Netlify | `main` (deploy automático) | de teste |
+| Produção (futura) | hospedagem paga | a definir | `producao` | reais |
+
+`NODE_ENV=production` é o **modo de execução** do Node (também usado no ambiente de teste), não o nome do ambiente.
+
 ## Documentação
 
 O `/docs` **não usa Swagger UI**. É um portal no visual do Web Saúde: header, cards, papéis e login com e-mail/senha.
 
 - Local: [http://localhost:3000/docs](http://localhost:3000/docs)
-- Teste / Staging (Render): [https://web-saude-api.onrender.com/docs](https://web-saude-api.onrender.com/docs)
+- Ambiente de Teste (Render): [https://web-saude-api.onrender.com/docs](https://web-saude-api.onrender.com/docs)
 - Produção: Hospedagem paga definitiva (alimentada exclusivamente pela branch `producao`)
 
 Arquivos: `docs-assets/index.html`, `app.css`, `app.js`. A spec OpenAPI continua em `/docs-json` para ferramentas.
