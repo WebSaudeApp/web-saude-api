@@ -24,10 +24,18 @@ export function redactLogRecord(
  * Registra o caminho sem query string e apenas a lista ordenada dos NOMES dos parâmetros,
  * nunca os valores (ex.: GET /estabelecimentos [especialidade,lat,lng,termo]).
  */
+const NOME_PARAMETRO_SEGURO = /^[\w.[\]-]{1,40}$/;
+const MAX_PARAMETROS_LOGADOS = 20;
+
 export function sanitizarRotaLog(request: Request): string {
   const caminho =
     request.path ?? (request.url ? request.url.split('?')[0] : '/');
-  const nomesParametros = Object.keys(request.query ?? {}).sort();
+  // Nomes vêm do cliente: só entram no log se forem curtos e sem caracteres de controle
+  // (evita forjar linhas de log com quebra de linha); os demais viram um marcador.
+  const nomesParametros = Object.keys(request.query ?? {})
+    .map((nome) => (NOME_PARAMETRO_SEGURO.test(nome) ? nome : '?'))
+    .sort()
+    .slice(0, MAX_PARAMETROS_LOGADOS);
 
   if (nomesParametros.length === 0) {
     return caminho;

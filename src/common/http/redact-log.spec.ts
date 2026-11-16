@@ -48,6 +48,22 @@ describe('redact-log (BE-31 #53)', () => {
       expect(sanitizarRotaLog(mockRequest)).toBe('/estabelecimentos/tipos');
     });
 
+    it('substitui nomes de parâmetros inválidos e limita a quantidade (anti log forging)', () => {
+      const query: Record<string, string> = {
+        'x\n[Nest] LOG admin login': '1',
+        ['x'.repeat(41)]: '1',
+      };
+      for (let i = 0; i < 30; i++) query[`p${i}`] = '1';
+      const log = sanitizarRotaLog({
+        path: '/estabelecimentos',
+        query,
+      } as unknown as Request);
+
+      expect(log).not.toMatch(/[\r\n]/);
+      expect(log).not.toContain('admin');
+      expect(log.split(',').length).toBeLessThanOrEqual(20);
+    });
+
     it('usa url sem query se path for indefinido', () => {
       const mockRequest = {
         url: '/health?check=true',
