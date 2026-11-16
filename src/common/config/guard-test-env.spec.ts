@@ -73,6 +73,36 @@ describe('QA-07: Guarda de isolamento do ambiente de testes', () => {
       ).toThrow(/Execução de testes abortada: DATABASE_URL/);
     });
 
+    it('aceita loopback IPv6 entre colchetes ([::1])', () => {
+      expect(extrairHost('http://[::1]:9200')).toBe('::1');
+      expect(() =>
+        validarAmbienteSeguroTestes(
+          'postgresql://postgres:postgres@[::1]:5432/websaude',
+          'http://[::1]:9200',
+        ),
+      ).not.toThrow();
+    });
+
+    it('usa o host= da query e bloqueia redirecionamento remoto', () => {
+      expect(() =>
+        validarAmbienteSeguroTestes(
+          'postgresql://u:p@localhost:5432/db?host=prod.example.com',
+          'http://localhost:9200',
+        ),
+      ).toThrow(/DATABASE_URL/);
+    });
+
+    it('bloqueia DIRECT_URL remota', () => {
+      expect(() =>
+        validarAmbienteSeguroTestes(
+          'postgresql://u:p@localhost:5432/db',
+          'http://localhost:9200',
+          false,
+          'postgresql://u:p@db.supabase.co:5432/postgres',
+        ),
+      ).toThrow(/DIRECT_URL/);
+    });
+
     it('permite host remoto quando allowRemote for explicitamente true', () => {
       expect(() =>
         validarAmbienteSeguroTestes(

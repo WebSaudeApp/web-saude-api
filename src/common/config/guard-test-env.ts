@@ -20,7 +20,11 @@ export function extrairHost(urlStr?: string): string | null {
   }
   try {
     const parsed = new URL(urlStr);
-    return parsed.hostname.toLowerCase();
+    // Um `host=` na query (estilo libpq) redireciona a conexão: ele é o host que vale.
+    const hostQuery = parsed.searchParams.get('host');
+    const host = hostQuery !== null ? hostQuery : parsed.hostname;
+    // URL.hostname devolve IPv6 entre colchetes ('[::1]'); normaliza para '::1'.
+    return host.replace(/^\[|\]$/g, '').toLowerCase() || null;
   } catch {
     // Fallback para strings de conexão onde new URL possa falhar
     const match = urlStr.match(/@([^:/]+)/);
@@ -37,6 +41,7 @@ export function validarAmbienteSeguroTestes(
   dbUrl?: string,
   esNode?: string,
   allowRemote = process.env.ALLOW_REMOTE_TEST_DATABASE === 'true',
+  directUrl?: string,
 ): void {
   if (allowRemote) {
     return;
@@ -49,6 +54,14 @@ export function validarAmbienteSeguroTestes(
       `[SEGURANÇA QA-07] Execução de testes abortada: DATABASE_URL aponta para um host remoto/não reconhecido ('${dbHost ?? 'ilegível'}'). ` +
         `Para testes E2E e de integração, utilize serviços locais (ex.: docker compose com localhost:5432). ` +
         `Caso realmente deseje rodar testes contra este host remoto, defina explicitamente ALLOW_REMOTE_TEST_DATABASE=true.`,
+    );
+  }
+
+  const directHost = extrairHost(directUrl);
+  if (directUrl && (!directHost || !ALLOWED_TEST_HOSTS.has(directHost))) {
+    throw new Error(
+      `[SEGURANÇA QA-07] Execução de testes abortada: DIRECT_URL aponta para um host remoto/não reconhecido ('${directHost ?? 'ilegível'}'). ` +
+        `Use o banco local ou defina explicitamente ALLOW_REMOTE_TEST_DATABASE=true.`,
     );
   }
 

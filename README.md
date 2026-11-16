@@ -458,7 +458,7 @@ Para evitar vazamento ou corrupção acidental de dados de produção/homologaç
 
 2. **Isolamento de Documentos e Índices**:
    - As suítes E2E utilizam geradores dinâmicos de ID para evitar conflitos de chave ou colisão entre execuções concorrentes.
-   - O alias e o índice do Elasticsearch podem ser sobrescritos via `ELASTICSEARCH_ALIAS_ESTABELECIMENTOS` e `ELASTICSEARCH_INDEX_ESTABELECIMENTOS`, **somente com `NODE_ENV=test`** (variáveis exportadas no shell; o `.env` é lido depois da importação das constantes). Fora de teste são ignoradas.
+   - O alias e o índice do Elasticsearch podem ser sobrescritos via `ELASTICSEARCH_ALIAS_ESTABELECIMENTOS` e `ELASTICSEARCH_INDEX_ESTABELECIMENTOS`, **somente com `NODE_ENV=test`**: nos testes valem tanto no shell quanto no `.env` (o `test/setup-env.ts` carrega o `.env` antes de importar os módulos). Fora de teste são ignoradas.
    - Limpeza simétrica em blocos `afterAll` limpa tanto as tabelas do PostgreSQL quanto os documentos correspondentes no Elasticsearch.
 
 Variáveis mínimas padrão para os testes estão centralizadas em `test/setup-env.ts`.

@@ -71,4 +71,6 @@ process.env.ELASTICSEARCH_NODE ??= 'http://localhost:9200';
 validarAmbienteSeguroTestes(
   process.env.DATABASE_URL,
   process.env.ELASTICSEARCH_NODE,
+  process.env.ALLOW_REMOTE_TEST_DATABASE === 'true',
+  process.env.DIRECT_URL,
 );
