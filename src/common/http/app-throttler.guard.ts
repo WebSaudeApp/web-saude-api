@@ -57,18 +57,23 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     }
 
     // 2. Conexão direta ou sem segredo de proxy válido:
-    // Utiliza o IP físico do socket da conexão TCP para impedir que cabeçalhos x-forwarded-for forjados
-    // alterem a chave de rate limit do invasor.
+    // usa req.ip, que o Express já resolve conforme `trust proxy` (TRUST_PROXY): atrás de um
+    // balanceador confiável é o IP real do cliente; sem proxy confiável é o IP do socket.
+    // O x-forwarded-for cru nunca é lido aqui, então não pode ser forjado para trocar a chave.
     const socket = req.socket as { remoteAddress?: string } | undefined;
     const directIp =
-      socket?.remoteAddress ||
-      (typeof req.ip === 'string' && req.ip.length > 0 ? req.ip : '127.0.0.1');
+      (typeof req.ip === 'string' && req.ip.length > 0 ? req.ip : undefined) ??
+      socket?.remoteAddress ??
+      '127.0.0.1';
 
     return `direct:${directIp}`;
   }
 }
 
-function segredoConfere(recebido: string | undefined, esperado: string): boolean {
+function segredoConfere(
+  recebido: string | undefined,
+  esperado: string,
+): boolean {
   if (typeof recebido !== 'string') {
     return false;
   }

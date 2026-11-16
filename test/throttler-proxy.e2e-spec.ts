@@ -60,7 +60,8 @@ describe('ThrottlerProxy (Rate limit por visitante atrás de proxy - BE-34 #59)'
       .compile();
 
     app = moduleFixture.createNestApplication<NestExpressApplication>();
-    (app as NestExpressApplication).set('trust proxy', true);
+    // Sem proxy confiável no teste: req.ip = IP do socket, então x-forwarded-for forjado é ignorado.
+    (app as NestExpressApplication).set('trust proxy', false);
     await app.init();
   });
 

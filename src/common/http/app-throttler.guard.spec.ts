@@ -72,15 +72,15 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
     expect(tracker).toBe('proxy:203.0.113.195');
   });
 
-  it('ignora x-forwarded-for forjado quando não há segredo de proxy válido (usa socket.remoteAddress)', async () => {
+  it('ignora x-forwarded-for forjado quando não há segredo de proxy válido (usa req.ip resolvido pelo Express)', async () => {
     guard = createGuard({
       FRONTEND_PROXY_SECRET: 'segredo-super-seguro',
       NODE_ENV: 'production',
     });
 
     const req = {
-      ip: '8.8.8.8',
-      socket: { remoteAddress: '198.51.100.22' },
+      ip: '198.51.100.22',
+      socket: { remoteAddress: '10.0.0.1' },
       headers: {
         'x-forwarded-for': '8.8.8.8',
       },
@@ -99,8 +99,8 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
     });
 
     const req = {
-      ip: '8.8.8.8',
-      socket: { remoteAddress: '198.51.100.22' },
+      ip: '198.51.100.22',
+      socket: { remoteAddress: '10.0.0.1' },
       headers: {
         'x-frontend-proxy-secret': 'segredo-incorreto',
         'x-forwarded-for': '8.8.8.8',

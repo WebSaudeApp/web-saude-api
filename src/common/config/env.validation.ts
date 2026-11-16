@@ -65,7 +65,8 @@ export class EnvironmentVariables {
   // todos os visitantes atras do proxy dividiriam um unico balde de rate limit.
   @ValidateIf(
     (o: EnvironmentVariables) =>
-      o.NODE_ENV === NodeEnv.Production || o.FRONTEND_PROXY_SECRET !== undefined,
+      o.NODE_ENV === NodeEnv.Production ||
+      o.FRONTEND_PROXY_SECRET !== undefined,
   )
   @IsString()
   @MinLength(32)

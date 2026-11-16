@@ -23,6 +23,8 @@ services:
         sync: false
       - key: DIRECT_URL
         sync: false
+      # ROLLOUT: defina FRONTEND_PROXY_SECRET (>= 32 caracteres) no painel do Render ANTES de
+      # mergear/deployar: com NODE_ENV=production a API nao sobe sem ele.
       - key: FRONTEND_PROXY_SECRET
         sync: false
       - key: ELASTICSEARCH_NODE

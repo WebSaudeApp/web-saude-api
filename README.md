@@ -413,7 +413,7 @@ web-saude-api/
 - **Isolamento de Visitantes:** Para evitar que múltiplos visitantes compartilhem um único balde de requisições atrás do servidor de front ou do balanceador de carga, a API utiliza o `AppThrottlerGuard` com Express configurado para `trust proxy`.
 - **Segurança contra Spoofing de IP:**
   - O front-end repassa o IP de origem do visitante no cabeçalho `X-Forwarded-For` juntamente com o cabeçalho de autenticação interna `X-Frontend-Proxy-Secret`.
-  - A API valida o `X-Frontend-Proxy-Secret` (comparação em tempo constante) contra `FRONTEND_PROXY_SECRET`, **obrigatória em `NODE_ENV=production`** (mínimo 32 caracteres); sem ela a API não sobe.
+  - A API valida o `X-Frontend-Proxy-Secret` (comparação em tempo constante) contra `FRONTEND_PROXY_SECRET`, **obrigatória em `NODE_ENV=production`** (mínimo 32 caracteres); sem ela a API não sobe. **Rollout:** cadastre o segredo no painel da hospedagem (e no front) antes do deploy; do contrário o serviço entra em crash-loop e o `/health` falha. Sem o segredo válido, o limite usa `req.ip`, resolvido conforme `TRUST_PROXY` (número de proxies confiáveis à frente da API).
   - Havendo correspondência, o limite de requisições é rastreado por visitante real (`proxy:<client_ip>`).
   - Em requisições diretas ou sem o segredo compartilhado, a API utiliza o IP físico da conexão TCP (`direct:<socket_ip>`), garantindo que clientes maliciosos não forjem `X-Forwarded-For` para burlar o limite.
 - **ValidationPipe** — `whitelist`, `forbidNonWhitelisted`, `transform`
