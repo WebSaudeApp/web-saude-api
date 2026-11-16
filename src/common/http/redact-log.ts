@@ -32,10 +32,14 @@ export function sanitizarRotaLog(request: Request): string {
     request.path ?? (request.url ? request.url.split('?')[0] : '/');
   // Nomes vêm do cliente: só entram no log se forem curtos e sem caracteres de controle
   // (evita forjar linhas de log com quebra de linha); os demais viram um marcador.
-  const nomesParametros = Object.keys(request.query ?? {})
-    .map((nome) => (NOME_PARAMETRO_SEGURO.test(nome) ? nome : '?'))
-    .sort()
-    .slice(0, MAX_PARAMETROS_LOGADOS);
+  const todos = Object.keys(request.query ?? {});
+  const validos = todos.filter((nome) => NOME_PARAMETRO_SEGURO.test(nome));
+  const invalidos = todos.length - validos.length;
+  const nomesParametros = validos.sort().slice(0, MAX_PARAMETROS_LOGADOS);
+  // Nomes inválidos viram um único marcador com a contagem (ex.: `?x7`).
+  if (invalidos > 0) {
+    nomesParametros.push(`?x${invalidos}`);
+  }
 
   if (nomesParametros.length === 0) {
     return caminho;

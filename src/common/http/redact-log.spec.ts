@@ -61,7 +61,8 @@ describe('redact-log (BE-31 #53)', () => {
 
       expect(log).not.toMatch(/[\r\n]/);
       expect(log).not.toContain('admin');
-      expect(log.split(',').length).toBeLessThanOrEqual(20);
+      expect(log.split(',').length).toBeLessThanOrEqual(21);
+      expect(log).toContain('?x2');
     });
 
     it('usa url sem query se path for indefinido', () => {

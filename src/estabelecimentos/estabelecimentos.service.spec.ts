@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { DiaSemana, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
+import { DefinirHorariosDto } from './dto/definir-horarios.dto';
 import { EstabelecimentosService } from './estabelecimentos.service';
 
 describe('EstabelecimentosService', () => {
@@ -514,15 +515,16 @@ describe('EstabelecimentosService', () => {
     it('reindexa no Elasticsearch ao definir horários (setOpeningHours)', async () => {
       findUnique.mockResolvedValue(estabelecimento);
 
-      await service.setOpeningHours(estabelecimento.id, {
+      const dto: DefinirHorariosDto = {
         horarios: [
           {
-            diaSemana: 'SEGUNDA',
+            diaSemana: DiaSemana.SEGUNDA,
             horaAbertura: '08:00',
             horaFechamento: '18:00',
           },
         ],
-      } as never);
+      };
+      await service.setOpeningHours(estabelecimento.id, dto);
 
       expect(indexarEstabelecimento).toHaveBeenCalledWith(
         expect.objectContaining({ id: estabelecimento.id }),
