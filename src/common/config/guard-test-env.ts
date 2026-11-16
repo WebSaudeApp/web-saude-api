@@ -6,7 +6,7 @@
  * evitando vazamento, destruição de dados reais ou criação de registros órfãos.
  */
 
-const ALLOWED_TEST_HOSTS = new Set([
+export const ALLOWED_TEST_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
   '::1',
@@ -28,6 +28,11 @@ export function extrairHost(urlStr?: string): string | null {
   }
 }
 
+export function hostLocalAutorizado(valor?: string): boolean {
+  const host = extrairHost(valor);
+  return host !== null && ALLOWED_TEST_HOSTS.has(host);
+}
+
 export function validarAmbienteSeguroTestes(
   dbUrl?: string,
   esNode?: string,
@@ -38,18 +43,19 @@ export function validarAmbienteSeguroTestes(
   }
 
   const dbHost = extrairHost(dbUrl);
-  if (dbHost && !ALLOWED_TEST_HOSTS.has(dbHost)) {
+  // Falha fechada: valor preenchido cujo host nao da para extrair tambem e bloqueado.
+  if (dbUrl && (!dbHost || !ALLOWED_TEST_HOSTS.has(dbHost))) {
     throw new Error(
-      `[SEGURANÇA QA-07] Execução de testes abortada: DATABASE_URL aponta para um host remoto não-local ('${dbHost}'). ` +
+      `[SEGURANÇA QA-07] Execução de testes abortada: DATABASE_URL aponta para um host remoto/não reconhecido ('${dbHost ?? 'ilegível'}'). ` +
         `Para testes E2E e de integração, utilize serviços locais (ex.: docker compose com localhost:5432). ` +
         `Caso realmente deseje rodar testes contra este host remoto, defina explicitamente ALLOW_REMOTE_TEST_DATABASE=true.`,
     );
   }
 
   const esHost = extrairHost(esNode);
-  if (esHost && !ALLOWED_TEST_HOSTS.has(esHost)) {
+  if (esNode && (!esHost || !ALLOWED_TEST_HOSTS.has(esHost))) {
     throw new Error(
-      `[SEGURANÇA QA-07] Execução de testes abortada: ELASTICSEARCH_NODE aponta para um host remoto não-local ('${esHost}'). ` +
+      `[SEGURANÇA QA-07] Execução de testes abortada: ELASTICSEARCH_NODE aponta para um host remoto/não reconhecido ('${esHost ?? 'ilegível'}'). ` +
         `Para testes E2E e de integração, utilize serviços locais (ex.: docker compose com localhost:9200). ` +
         `Caso realmente deseje rodar testes contra este host remoto, defina explicitamente ALLOW_REMOTE_TEST_DATABASE=true.`,
     );

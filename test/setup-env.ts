@@ -1,7 +1,16 @@
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import 'reflect-metadata';
-import { extrairHost, validarAmbienteSeguroTestes } from './guard-test-env';
+import {
+  hostLocalAutorizado,
+  validarAmbienteSeguroTestes,
+} from './guard-test-env';
+
+const CHAVES_PROTEGIDAS = new Set([
+  'DATABASE_URL',
+  'DIRECT_URL',
+  'ELASTICSEARCH_NODE',
+]);
 
 const envTestPath = resolve(__dirname, '../.env.test');
 const envDefaultPath = resolve(__dirname, '../.env');
@@ -26,20 +35,19 @@ if (existsSync(envPath)) {
       value = value.slice(1, -1);
     }
 
-    // QA-07 (#58): Se for o .env comum e contiver DATABASE_URL/DIRECT_URL remota (ex.: Supabase),
-    // ignora para testes automatizados, forçando o fallback seguro para localhost.
+    // QA-07 (#58): valores REMOTOS vindos do .env comum (banco ou Elasticsearch) sao ignorados
+    // nos testes, caindo nos padroes locais abaixo; mesma politica e mesma allowlist do guard.
+    // Valores remotos exportados no shell continuam sendo barrados pelo guard.
     if (
       envPath !== envTestPath &&
-      (key === 'DATABASE_URL' || key === 'DIRECT_URL') &&
-      process.env.ALLOW_REMOTE_TEST_DATABASE !== 'true'
+      CHAVES_PROTEGIDAS.has(key) &&
+      process.env.ALLOW_REMOTE_TEST_DATABASE !== 'true' &&
+      !hostLocalAutorizado(value)
     ) {
-      const host = extrairHost(value);
-      if (
-        host &&
-        !['localhost', '127.0.0.1', '::1', 'postgres'].includes(host)
-      ) {
-        continue;
-      }
+      console.warn(
+        `[QA-07] ${key} remoto no .env ignorado nos testes; usando o padrao local.`,
+      );
+      continue;
     }
 
     if (!process.env[key]) {

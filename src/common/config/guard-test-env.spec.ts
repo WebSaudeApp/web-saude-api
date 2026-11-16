@@ -52,7 +52,7 @@ describe('QA-07: Guarda de isolamento do ambiente de testes', () => {
           'http://localhost:9200',
         ),
       ).toThrow(
-        /Execução de testes abortada: DATABASE_URL aponta para um host remoto não-local/,
+        /Execução de testes abortada: DATABASE_URL aponta para um host remoto\/não reconhecido/,
       );
     });
 
@@ -63,8 +63,14 @@ describe('QA-07: Guarda de isolamento do ambiente de testes', () => {
           'https://my-cloud-es.es.io:9243',
         ),
       ).toThrow(
-        /Execução de testes abortada: ELASTICSEARCH_NODE aponta para um host remoto não-local/,
+        /Execução de testes abortada: ELASTICSEARCH_NODE aponta para um host remoto\/não reconhecido/,
       );
+    });
+
+    it('bloqueia valor preenchido cujo host não pode ser extraído (falha fechada)', () => {
+      expect(() =>
+        validarAmbienteSeguroTestes('valor-ilegivel', 'http://localhost:9200'),
+      ).toThrow(/Execução de testes abortada: DATABASE_URL/);
     });
 
     it('permite host remoto quando allowRemote for explicitamente true', () => {
