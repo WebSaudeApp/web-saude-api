@@ -64,17 +64,20 @@ async function main() {
     }
   }
   if (alteradas.length > 0) {
-    if (process.env.ALLOW_MARCO_ZERO === 'true') {
+    // O bypass vale apenas para a release (SHA) informada: assim ele expira sozinho quando
+    // a producao receber o marco zero e nunca vira um desligamento permanente do teste.
+    const baseSha = runOutput(`git rev-parse ${baseRef}`);
+    if (process.env.ALLOW_MARCO_ZERO_FOR === baseSha) {
       console.warn(
-        `AVISO: ${alteradas.length} migration(s) da release foram removidas/alteradas, mas ALLOW_MARCO_ZERO=true ` +
-          '(marco zero deliberado). Pulando o teste de upgrade; registre a decisao no PR.',
+        `AVISO: ${alteradas.length} migration(s) da release foram removidas/alteradas, mas ALLOW_MARCO_ZERO_FOR=${baseSha} ` +
+          '(marco zero deliberado para esta release). Pulando o teste de upgrade; registre a decisao no PR.',
       );
       return;
     }
     throw new Error(
       `Migrations ja publicadas em ${baseRef} foram removidas ou alteradas (migration aplicada e imutavel):\n  ` +
         alteradas.join('\n  ') +
-        '\nSe for um marco zero deliberado (dump + reset + registro), defina ALLOW_MARCO_ZERO=true.',
+        '\nSe for um marco zero deliberado (dump + reset + registro), defina ALLOW_MARCO_ZERO_FOR=<sha de ' + baseRef + '> (valido so para esta release).',
     );
   }
   console.log(`Utilizando ref base: ${baseRef} (${baseDirs.length} migrations, todas preservadas)`);
@@ -100,19 +103,21 @@ async function main() {
     console.log('\n--- Passo 3: Inserindo dados mínimos de teste no banco da base ---');
     // Insere registros mínimos para garantir que migrations aditivas não quebrem tabelas com dados
     const sqlSeed = `
-      -- Inserir tipo se não existir
-      INSERT INTO "tipos_estabelecimento" ("id", "nome", "criado_em", "atualizado_em")
-      VALUES ('11111111-1111-4111-8111-111111111111', 'HOSPITAL', NOW(), NOW())
+      INSERT INTO "tipos_estabelecimento" ("id", "nome")
+      VALUES ('11111111-1111-4111-8111-111111111111', 'HOSPITAL')
       ON CONFLICT ("nome") DO NOTHING;
 
-      -- Inserir endereço
-      INSERT INTO "enderecos" ("id", "logradouro", "numero", "bairro", "cidade", "estado", "cep", "latitude", "longitude", "criado_em", "atualizado_em")
-      VALUES ('end-upgrade-seed-1', 'Av. Teste Upgrade', '100', 'Centro', 'Recife', 'PE', '50000-000', -8.05, -34.88, NOW(), NOW())
+      INSERT INTO "enderecos" ("id", "cep", "logradouro", "numero", "bairro", "cidade", "estado", "latitude", "longitude")
+      VALUES ('end-upgrade-seed-1', '50000-000', 'Av. Teste Upgrade', '100', 'Centro', 'Recife', 'PE', -8.05, -34.88)
       ON CONFLICT ("id") DO NOTHING;
 
-      -- Inserir estabelecimento vinculado
-      INSERT INTO "estabelecimentos" ("id", "nome", "tipo_id", "endereco_id", "ativo", "criado_em", "atualizado_em")
-      VALUES ('est-upgrade-seed-1', 'Unidade Teste Upgrade', '11111111-1111-4111-8111-111111111111', 'end-upgrade-seed-1', true, NOW(), NOW())
+      INSERT INTO "estabelecimentos" ("id", "nome", "tipoId", "enderecoId")
+      VALUES (
+        'est-upgrade-seed-1',
+        'Unidade Teste Upgrade',
+        (SELECT "id" FROM "tipos_estabelecimento" WHERE "nome" = 'HOSPITAL'),
+        'end-upgrade-seed-1'
+      )
       ON CONFLICT ("id") DO NOTHING;
     `;
     const tempSqlFile = path.join(tempDir, 'seed.sql');

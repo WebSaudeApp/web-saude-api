@@ -95,5 +95,5 @@ jobs:
       - run: npm ci
       - name: Executar validação de upgrade de migrations
         env:
-          ALLOW_MARCO_ZERO: ${{ vars.ALLOW_MARCO_ZERO }}
+          ALLOW_MARCO_ZERO_FOR: ${{ vars.ALLOW_MARCO_ZERO_FOR }}
         run: node scripts/ci-test-migration-upgrade.js
