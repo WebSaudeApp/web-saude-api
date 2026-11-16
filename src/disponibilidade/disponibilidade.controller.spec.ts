@@ -46,7 +46,7 @@ describe('DisponibilidadeController', () => {
     });
   });
 
-  it('lança 503 quando o elasticsearch está indisponível', async () => {
+  it('responde 200 degradado quando só o elasticsearch está indisponível', async () => {
     const prisma = {
       isDatabaseConnected: jest.fn().mockResolvedValue(true),
     };
@@ -58,14 +58,10 @@ describe('DisponibilidadeController', () => {
       busca as unknown as BuscaService,
     );
 
-    const promessa = controller.verificar();
-    await expect(promessa).rejects.toBeInstanceOf(ServiceUnavailableException);
-    await expect(promessa).rejects.toMatchObject({
-      response: {
-        status: 'erro',
-        banco: 'conectado',
-        elasticsearch: 'desconectado',
-      },
+    await expect(controller.verificar()).resolves.toEqual({
+      status: 'degradado',
+      banco: 'conectado',
+      elasticsearch: 'desconectado',
     });
   });
 

@@ -6,8 +6,8 @@ export class RespostaRaizDto {
 }
 
 export class RespostaDisponibilidadeDto {
-  @ApiProperty({ example: 'ok', enum: ['ok', 'erro'] })
-  status!: 'ok' | 'erro';
+  @ApiProperty({ example: 'ok', enum: ['ok', 'degradado', 'erro'] })
+  status!: 'ok' | 'degradado' | 'erro';
 
   @ApiProperty({
     example: 'conectado',

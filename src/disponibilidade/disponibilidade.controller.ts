@@ -36,18 +36,22 @@ export class DisponibilidadeController {
       this.buscaService.estaDisponivel(),
     ]);
 
-    if (!bancoConectado || !elasticsearchConectado) {
-      throw new ServiceUnavailableException({
-        status: 'erro',
-        banco: bancoConectado ? 'conectado' : 'desconectado',
-        elasticsearch: elasticsearchConectado ? 'conectado' : 'desconectado',
-      });
+    const corpo: RespostaDisponibilidadeDto = {
+      status: !bancoConectado
+        ? 'erro'
+        : elasticsearchConectado
+          ? 'ok'
+          : 'degradado',
+      banco: bancoConectado ? 'conectado' : 'desconectado',
+      elasticsearch: elasticsearchConectado ? 'conectado' : 'desconectado',
+    };
+
+    // Só o banco decide o status HTTP (o health check da hospedagem usa esta rota).
+    // O ES fora derruba apenas a busca por localização; o corpo informa o estado.
+    if (!bancoConectado) {
+      throw new ServiceUnavailableException(corpo);
     }
 
-    return {
-      status: 'ok',
-      banco: 'conectado',
-      elasticsearch: 'conectado',
-    };
+    return corpo;
   }
 }
