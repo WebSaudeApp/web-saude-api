@@ -126,8 +126,15 @@ SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations ORDER
 ### Passo 4.4: Repor os dados de teste
 Se houve reset, repor os dados necessários (o seed de `tipos_estabelecimento` já vem na migration). Os dados dos módulos removidos (usuários, avaliações) ficam só no dump.
 
-### Passo 4.5: Registro
-Registrar no PR/ADR: "squash pré-lançamento; daqui em diante, migrations aplicadas são imutáveis".
+### Passo 4.5: Liberar o CI só para esta release
+O job `upgrade-migrations` (QA-05) bloqueia o PR `main` → `producao` porque as migrations antigas de `producao` foram removidas pelo squash. Antes de abrir/re-rodar esse PR:
+```bash
+git fetch origin producao && git rev-parse origin/producao
+```
+Em *Settings → Secrets and variables → Actions → Variables*, crie `ALLOW_MARCO_ZERO_FOR` com **esse SHA**. O bypass só vale enquanto `producao` estiver nesse commit; mesmo com ele, o job aplica as migrations atuais num banco vazio e verifica o drift. Depois do merge em `producao`, **apague a variável** (ela já não teria efeito, mas não deve ficar esquecida).
+
+### Passo 4.6: Registro
+Registrar no PR/ADR: "squash pré-lançamento; daqui em diante, migrations aplicadas são imutáveis", com o SHA usado em `ALLOW_MARCO_ZERO_FOR`.
 
 ---
 
