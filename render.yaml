@@ -23,6 +23,8 @@ services:
         sync: false
       - key: DIRECT_URL
         sync: false
+      - key: FRONTEND_PROXY_SECRET
+        sync: false
       - key: ELASTICSEARCH_NODE
         sync: false
       - key: ELASTICSEARCH_API_KEY

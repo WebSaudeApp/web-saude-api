@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
@@ -44,7 +45,7 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     const incomingSecret = headers['x-frontend-proxy-secret'];
 
     // 1. Requisição autenticada vinda do proxy do front-end com segredo compartilhado
-    if (proxySecret && incomingSecret === proxySecret) {
+    if (proxySecret && segredoConfere(incomingSecret, proxySecret)) {
       const forwardedFor = headers['x-forwarded-for'];
       if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
         // Pega o primeiro IP (IP real de quem originou a requisição na borda)
@@ -65,4 +66,13 @@ export class AppThrottlerGuard extends ThrottlerGuard {
 
     return `direct:${directIp}`;
   }
+}
+
+function segredoConfere(recebido: string | undefined, esperado: string): boolean {
+  if (typeof recebido !== 'string') {
+    return false;
+  }
+  const a = Buffer.from(recebido);
+  const b = Buffer.from(esperado);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

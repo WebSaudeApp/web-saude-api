@@ -8,6 +8,8 @@ import {
   IsString,
   Max,
   Min,
+  MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -58,6 +60,16 @@ export class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   ELASTICSEARCH_NODE!: string;
+
+  // Segredo compartilhado com o proxy do front (BE-34). Obrigatorio em producao: sem ele,
+  // todos os visitantes atras do proxy dividiriam um unico balde de rate limit.
+  @ValidateIf(
+    (o: EnvironmentVariables) =>
+      o.NODE_ENV === NodeEnv.Production || o.FRONTEND_PROXY_SECRET !== undefined,
+  )
+  @IsString()
+  @MinLength(32)
+  FRONTEND_PROXY_SECRET?: string;
 
   @IsString()
   @IsOptional()
