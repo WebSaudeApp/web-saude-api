@@ -77,22 +77,39 @@ ELASTICSEARCH_API_KEY="[CHAVE-DE-API-DO-ELASTICSEARCH]"
 A migration `20261027120000_init_estabelecimentos` cria tudo do zero (sem `IF NOT EXISTS`). Num banco que já tem as 11 migrations antigas ela falha com `type "TipoContato" already exists`, e a migration falhada trava os deploys seguintes (`P3009`) até um `prisma migrate resolve` manual.
 
 ```sql
+-- Retorna NULL se o banco nunca recebeu migrations (a tabela não existe)
+SELECT to_regclass('public._prisma_migrations');
+-- Se NÃO for NULL, liste o histórico:
 SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations ORDER BY started_at;
 ```
-- **Banco vazio** (produção nova): vá direto ao 4.2.
+- **Banco vazio** (resultado `NULL`; produção nova): vá direto ao 4.2.
 - **Banco com as migrations antigas** (ex.: o banco de teste): faça o reset do 4.1 antes do 4.2.
 
 > **Evidência pendente (registrar no PR #28 antes do aceite):** o Render sobe o `607c4db` com sucesso, mas o `_prisma_migrations` do banco de teste só tem as migrations antigas. Anexar o log do deploy desse commit e o campo *Docker Command* do painel do Render. Hoje o `CMD` do Dockerfile **não executa `migrate deploy`** (commit `0be2145`): em qualquer hospedagem, a migration é um passo **manual** deste runbook.
 
 ### Passo 4.1: Backup e reset (só se o banco já tiver histórico)
-```bash
-pg_dump -h [HOST_BANCO] -U postgres -d postgres -F c -b -v -f "backup_marco_zero_$(date +%Y%m%d_%H%M%S).dump"
-```
-*Guarde o arquivo em local externo e seguro.* Depois do dump, zere o schema (apaga tudo, inclusive `_prisma_migrations`):
+Antes de qualquer comando destrutivo, **confirme que está no banco certo** (host e nome devem ser os do ambiente que você quer resetar):
 ```sql
-DROP SCHEMA public CASCADE; CREATE SCHEMA public;
+SELECT current_database(), inet_server_addr(), current_user;
 ```
-Se o banco for gerenciado (ex.: Supabase), prefira recriar o projeto/banco em vez de dropar o schema `public`, para não perder extensões e permissões.
+Faça o dump e **verifique** que ele é legível antes de seguir:
+```bash
+ARQ="backup_marco_zero_$(date +%Y%m%d_%H%M%S).dump"
+pg_dump -h [HOST_BANCO] -U postgres -d postgres -F c -b -v -f "$ARQ" && pg_restore --list "$ARQ" > /dev/null && echo "DUMP OK"
+```
+*Só continue se aparecer `DUMP OK`. Guarde o arquivo em local externo e seguro.*
+
+Preferência: **recriar o banco/projeto vazio** (é o caminho que preserva extensões, papéis e permissões da hospedagem). Se for realmente preciso resetar no mesmo banco, remova **somente os objetos da aplicação** (não use `DROP SCHEMA public CASCADE`, que também apaga extensões como `unaccent` e permissões do schema `public` em bancos gerenciados como o Supabase):
+```sql
+BEGIN;
+DROP TABLE IF EXISTS contatos, horarios_funcionamento, midias, estabelecimento_especialidades,
+  estabelecimentos, enderecos, especialidades, tipos_estabelecimento, _prisma_migrations CASCADE;
+DROP TYPE IF EXISTS "DiaSemana", "TipoContato", "TipoMidia";
+-- confira o que sobrou antes de confirmar:
+SELECT tablename FROM pg_tables WHERE schemaname = 'public';
+COMMIT;  -- ou ROLLBACK; se algo estiver errado
+```
+A extensão `unaccent` é recriada pela própria migration (`CREATE EXTENSION IF NOT EXISTS`).
 
 ### Passo 4.2: Aplicação das migrations
 Com `DIRECT_URL` (modo sessão):
