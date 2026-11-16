@@ -282,7 +282,7 @@ describe('Busca (e2e / Integração Elasticsearch)', () => {
     });
   });
 
-  describe('Sincronização com o Banco de Dados (BE-15)', () => {
+  describe('Indexação direta no Elasticsearch via BuscaService (não passa pelo Postgres; a propagação do CRUD é coberta em estabelecimentos.e2e-spec)', () => {
     it('cadastra/atualiza estabelecimento no índice e reflete nas buscas', async () => {
       const docNovo: DocumentoEstabelecimento = {
         id: 'teste-sinc-1',

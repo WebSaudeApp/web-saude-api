@@ -50,6 +50,14 @@ describe('EstabelecimentosService', () => {
       findFirst: findFirstTipo,
     },
     especialidade: { count: jest.fn(() => Promise.resolve(1)) },
+    estabelecimentoEspecialidade: {
+      deleteMany: jest.fn(() => Promise.resolve({ count: 0 })),
+      createMany: jest.fn(() => Promise.resolve({ count: 1 })),
+    },
+    horarioFuncionamento: {
+      deleteMany: jest.fn(() => Promise.resolve({ count: 0 })),
+      createMany: jest.fn(() => Promise.resolve({ count: 1 })),
+    },
     $queryRaw: queryRaw,
     $transaction: jest.fn((operations: Promise<unknown>[]) =>
       Promise.all(operations),
@@ -448,7 +456,7 @@ describe('EstabelecimentosService', () => {
     });
   });
 
-  describe('Sincronização no Ciclo de Vida: create, update e remove (BE-15 / QA-06)', () => {
+  describe('Sincronização no Ciclo de Vida: create, update, remove, especialidades e horários (BE-15 / QA-06)', () => {
     it('executa indexação no Elasticsearch ao criar estabelecimento (create)', async () => {
       findUnique.mockResolvedValue(estabelecimento);
 
@@ -488,6 +496,36 @@ describe('EstabelecimentosService', () => {
         expect.objectContaining({
           id: estabelecimento.id,
         }),
+      );
+    });
+
+    it('reindexa no Elasticsearch ao definir especialidades (setSpecialties)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.setSpecialties(estabelecimento.id, {
+        especialidadeIds: ['especialidade-1'],
+      });
+
+      expect(indexarEstabelecimento).toHaveBeenCalledWith(
+        expect.objectContaining({ id: estabelecimento.id }),
+      );
+    });
+
+    it('reindexa no Elasticsearch ao definir horários (setOpeningHours)', async () => {
+      findUnique.mockResolvedValue(estabelecimento);
+
+      await service.setOpeningHours(estabelecimento.id, {
+        horarios: [
+          {
+            diaSemana: 'SEGUNDA',
+            horaAbertura: '08:00',
+            horaFechamento: '18:00',
+          },
+        ],
+      } as never);
+
+      expect(indexarEstabelecimento).toHaveBeenCalledWith(
+        expect.objectContaining({ id: estabelecimento.id }),
       );
     });
 
