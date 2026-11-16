@@ -10,6 +10,7 @@ const base = {
   THROTTLE_LIMIT: '100',
   SWAGGER_ENABLED: 'false',
   ELASTICSEARCH_NODE: 'http://localhost:9200',
+  TRUST_PROXY: '1',
 };
 
 describe('validate (FRONTEND_PROXY_SECRET)', () => {
@@ -31,5 +32,17 @@ describe('validate (FRONTEND_PROXY_SECRET)', () => {
 
   it('e opcional fora de producao', () => {
     expect(() => validate({ ...base, NODE_ENV: 'development' })).not.toThrow();
+  });
+
+  it('exige TRUST_PROXY numérico em produção', () => {
+    const { TRUST_PROXY: _omitido, ...semTrustProxy } = base;
+    void _omitido;
+    const segredo = { FRONTEND_PROXY_SECRET: 'x'.repeat(32) };
+    expect(() => validate({ ...semTrustProxy, ...segredo })).toThrow(
+      /TRUST_PROXY/,
+    );
+    expect(() =>
+      validate({ ...base, ...segredo, TRUST_PROXY: 'true' }),
+    ).toThrow(/TRUST_PROXY/);
   });
 });

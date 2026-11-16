@@ -8,6 +8,7 @@ import {
   IsString,
   Max,
   Min,
+  Matches,
   MinLength,
   ValidateIf,
   validateSync,
@@ -71,6 +72,15 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(32)
   FRONTEND_PROXY_SECRET?: string;
+
+  // Número de proxies confiáveis à frente da API (ex.: 1 no Render). Obrigatório em produção:
+  // um valor errado torna o x-forwarded-for forjável ou junta todos num único balde.
+  @ValidateIf(
+    (o: EnvironmentVariables) =>
+      o.NODE_ENV === NodeEnv.Production || o.TRUST_PROXY !== undefined,
+  )
+  @Matches(/^(false|\d+)$/)
+  TRUST_PROXY?: string;
 
   @IsString()
   @IsOptional()

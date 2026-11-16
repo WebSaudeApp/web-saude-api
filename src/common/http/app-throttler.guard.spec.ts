@@ -41,7 +41,7 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
       socket: { remoteAddress: '10.0.0.1' },
       headers: {
         'x-frontend-proxy-secret': 'segredo-super-seguro',
-        'x-forwarded-for': '203.0.113.195',
+        'x-frontend-visitor-ip': '203.0.113.195',
       },
     };
 
@@ -51,7 +51,7 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
     expect(tracker).toBe('proxy:203.0.113.195');
   });
 
-  it('extrai o primeiro IP quando x-forwarded-for contém cadeia de proxies', async () => {
+  it('ignora x-forwarded-for (cadeia forjável) e IP inválido no cabeçalho do visitante', async () => {
     guard = createGuard({
       FRONTEND_PROXY_SECRET: 'segredo-super-seguro',
       NODE_ENV: 'production',
@@ -62,14 +62,15 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
       socket: { remoteAddress: '10.0.0.1' },
       headers: {
         'x-frontend-proxy-secret': 'segredo-super-seguro',
-        'x-forwarded-for': '203.0.113.195, 10.0.0.2, 10.0.0.3',
+        'x-frontend-visitor-ip': 'nao-e-ip',
+        'x-forwarded-for': '1.2.3.4, 203.0.113.195',
       },
     };
 
     const tracker = await (
       guard as unknown as { getTracker: (r: unknown) => Promise<string> }
     ).getTracker(req);
-    expect(tracker).toBe('proxy:203.0.113.195');
+    expect(tracker).toBe('direct:10.0.0.1');
   });
 
   it('ignora x-forwarded-for forjado quando não há segredo de proxy válido (usa req.ip resolvido pelo Express)', async () => {

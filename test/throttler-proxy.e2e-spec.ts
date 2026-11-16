@@ -78,27 +78,27 @@ describe('ThrottlerProxy (Rate limit por visitante atrás de proxy - BE-34 #59)'
     await request(server)
       .get('/estabelecimentos/tipos')
       .set('x-frontend-proxy-secret', 'segredo-proxy-e2e')
-      .set('x-forwarded-for', '203.0.113.10')
+      .set('x-frontend-visitor-ip', '203.0.113.10')
       .expect(200);
 
     await request(server)
       .get('/estabelecimentos/tipos')
       .set('x-frontend-proxy-secret', 'segredo-proxy-e2e')
-      .set('x-forwarded-for', '203.0.113.10')
+      .set('x-frontend-visitor-ip', '203.0.113.10')
       .expect(200);
 
     // 3ª requisição do visitante A excede o limite (429)
     await request(server)
       .get('/estabelecimentos/tipos')
       .set('x-frontend-proxy-secret', 'segredo-proxy-e2e')
-      .set('x-forwarded-for', '203.0.113.10')
+      .set('x-frontend-visitor-ip', '203.0.113.10')
       .expect(429);
 
     // Visitante B, passando pelo mesmo proxy mas com outro IP, recebe 200 (balde isolado)
     await request(server)
       .get('/estabelecimentos/tipos')
       .set('x-frontend-proxy-secret', 'segredo-proxy-e2e')
-      .set('x-forwarded-for', '203.0.113.20')
+      .set('x-frontend-visitor-ip', '203.0.113.20')
       .expect(200);
   });
 

@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
@@ -17,7 +18,7 @@ import {
  * (Next.js server-side proxy ou balanceador de carga da hospedagem).
  *
  * Segurança contra spoofing:
- * - O IP informado no cabeçalho `x-forwarded-for` só é considerado caso a requisição
+ * - O IP informado no cabeçalho `x-frontend-visitor-ip` só é considerado caso a requisição
  *   venha acompanhada do segredo compartilhado (`x-frontend-proxy-secret` === FRONTEND_PROXY_SECRET).
  * - Clientes diretos sem o segredo compartilhado são rastreados exclusivamente pelo IP físico do socket
  *   (`req.socket.remoteAddress`), impedindo que invasores forjem `x-forwarded-for` para burlar o limite.
@@ -44,15 +45,15 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     const proxySecret = this.configService.get<string>('FRONTEND_PROXY_SECRET');
     const incomingSecret = headers['x-frontend-proxy-secret'];
 
-    // 1. Requisição autenticada vinda do proxy do front-end com segredo compartilhado
+    // 1. Requisição do proxy do front com segredo compartilhado: o front informa o IP do
+    //    visitante num cabeçalho PRÓPRIO, que ele sempre sobrescreve (nunca copia do cliente).
+    //    Não usamos x-forwarded-for aqui: numa cadeia, a primeira entrada pode ter sido escrita
+    //    pelo próprio visitante e as últimas são saltos internos.
     if (proxySecret && segredoConfere(incomingSecret, proxySecret)) {
-      const forwardedFor = headers['x-forwarded-for'];
-      if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
-        // Pega o primeiro IP (IP real de quem originou a requisição na borda)
-        const clientIp = forwardedFor.split(',')[0].trim();
-        if (clientIp) {
-          return `proxy:${clientIp}`;
-        }
+      const visitante = headers['x-frontend-visitor-ip'];
+      const clientIp = typeof visitante === 'string' ? visitante.trim() : '';
+      if (isIP(clientIp) !== 0) {
+        return `proxy:${clientIp}`;
       }
     }
 
