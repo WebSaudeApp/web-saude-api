@@ -92,6 +92,15 @@ describe('QA-07: Guarda de isolamento do ambiente de testes', () => {
       ).toThrow(/DATABASE_URL/);
     });
 
+    it('bloqueia hostname remoto mesmo com ?host=localhost (todos os hosts precisam ser locais)', () => {
+      expect(() =>
+        validarAmbienteSeguroTestes(
+          'postgresql://u:p@db.prod.example.com:5432/db?host=localhost',
+          'http://localhost:9200',
+        ),
+      ).toThrow(/DATABASE_URL/);
+    });
+
     it('bloqueia DIRECT_URL remota', () => {
       expect(() =>
         validarAmbienteSeguroTestes(
