@@ -39,6 +39,31 @@ export class AppThrottlerGuard extends ThrottlerGuard {
   }
 
   private ultimoAvisoMs = 0;
+  private diagnosticoFeito = false;
+
+  /**
+   * Uma única vez por processo, loga QUANTOS saltos o x-forwarded-for trouxe e quantos o
+   * Express considerou confiáveis (TRUST_PROXY). Só contagens, nunca IPs (LGPD). Serve para
+   * conferir no log da hospedagem se TRUST_PROXY bate com o número real de proxies.
+   */
+  private diagnosticarProxy(req: Record<string, unknown>): void {
+    if (this.diagnosticoFeito) {
+      return;
+    }
+    const headers = (req.headers ?? {}) as Record<string, string | undefined>;
+    const xff = headers['x-forwarded-for'];
+    if (typeof xff !== 'string' || xff.trim() === '') {
+      return;
+    }
+    this.diagnosticoFeito = true;
+    const saltos = xff.split(',').filter((p) => p.trim()).length;
+    const ips = Array.isArray(req.ips) ? req.ips.length : 0;
+    this.logger.log(
+      `Diagnóstico de proxy: x-forwarded-for com ${saltos} entrada(s); TRUST_PROXY=${
+        this.configService.get<string>('TRUST_PROXY') ?? 'false'
+      }; req.ips com ${ips} entrada(s). TRUST_PROXY deve ser igual ao número de proxies da hospedagem (normalmente ${saltos} se o cliente não enviou o cabeçalho).`,
+    );
+  }
 
   /** Aceita um IP válido ou uma lista "a, b" (usa o primeiro IP válido); senão, undefined. */
   private extrairIpVisitante(valor: string | undefined): string | undefined {
@@ -65,6 +90,7 @@ export class AppThrottlerGuard extends ThrottlerGuard {
 
   protected async getTracker(req: Record<string, unknown>): Promise<string> {
     await Promise.resolve();
+    this.diagnosticarProxy(req);
 
     const headers = (req.headers ?? {}) as Record<string, string | undefined>;
     const proxySecret = this.configService.get<string>('FRONTEND_PROXY_SECRET');

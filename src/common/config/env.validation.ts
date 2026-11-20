@@ -22,9 +22,10 @@ enum NodeEnv {
 
 // TRUST_PROXY aceito: 'false', número de proxies, ou lista de keywords/IPs/CIDRs do Express
 // (ex.: 'loopback, 10.0.0.0/8'). 'true' é rejeitado de propósito: confiaria em qualquer
-// X-Forwarded-For, tornando o IP do visitante forjável.
+// X-Forwarded-For, tornando o IP do visitante forjável. Pelo mesmo motivo, CIDR com prefixo
+// menor que /8 (ex.: 0.0.0.0/0, ::/0) é rejeitado.
 const TRUST_PROXY_ITEM =
-  '(?:loopback|linklocal|uniquelocal|[0-9a-fA-F:.]+(?:/\\d{1,3})?)';
+  '(?:loopback|linklocal|uniquelocal|[0-9a-fA-F:.]+(?:/(?:[89]|[1-9]\\d{1,2}))?)';
 export const TRUST_PROXY_PATTERN = new RegExp(
   `^(?:false|\\d+|${TRUST_PROXY_ITEM}(?:\\s*,\\s*${TRUST_PROXY_ITEM})*)$`,
 );

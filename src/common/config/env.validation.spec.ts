@@ -41,9 +41,11 @@ describe('validate (FRONTEND_PROXY_SECRET)', () => {
     expect(() => validate({ ...semTrustProxy, ...segredo })).toThrow(
       /TRUST_PROXY/,
     );
-    expect(() =>
-      validate({ ...base, ...segredo, TRUST_PROXY: 'true' }),
-    ).toThrow(/TRUST_PROXY/);
+    for (const valor of ['true', '0.0.0.0/0', '::/0', '10.0.0.0/7']) {
+      expect(() =>
+        validate({ ...base, ...segredo, TRUST_PROXY: valor }),
+      ).toThrow(/TRUST_PROXY/);
+    }
   });
 
   it('aceita TRUST_PROXY numérico, false e lista CIDR/keywords; rejeita true', () => {
@@ -59,8 +61,10 @@ describe('validate (FRONTEND_PROXY_SECRET)', () => {
         validate({ ...base, ...segredo, TRUST_PROXY: valor }),
       ).not.toThrow();
     }
-    expect(() =>
-      validate({ ...base, ...segredo, TRUST_PROXY: 'true' }),
-    ).toThrow(/TRUST_PROXY/);
+    for (const valor of ['true', '0.0.0.0/0', '::/0', '10.0.0.0/7']) {
+      expect(() =>
+        validate({ ...base, ...segredo, TRUST_PROXY: valor }),
+      ).toThrow(/TRUST_PROXY/);
+    }
   });
 });
