@@ -14,6 +14,7 @@ import {
   toEnderecoResponse,
   toEnderecoUpdate,
 } from './endereco.util';
+import { elasticsearchIndisponivel } from '../busca/erros-elasticsearch';
 import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
 import { mapearEstabelecimentoParaDocumento } from '../busca/documento-estabelecimento';
@@ -194,9 +195,14 @@ export class EstabelecimentosService {
 
       return paginada(dados, resultado.total, pagina, limite);
     } catch (erro) {
-      if (erro instanceof BadRequestException) {
+      // Só indisponibilidade do ES (conexão, timeout, 5xx) cai no PostgreSQL. Erro 4xx do ES
+      // (bug na query), erro do banco ou erro nosso é relançado: não vira degradação silenciosa.
+      if (!elasticsearchIndisponivel(erro)) {
         throw erro;
       }
+      this.logger.warn(
+        `Elasticsearch indisponível (${erro instanceof Error ? erro.message : String(erro)}).`,
+      );
       return this.buscarPorProximidadeFallbackPostgres(query, pagina, limite);
     }
   }
@@ -206,9 +212,7 @@ export class EstabelecimentosService {
     pagina: number,
     limite: number,
   ) {
-    this.logger.warn(
-      'Elasticsearch indisponível. Executando fallback de busca geográfica no PostgreSQL.',
-    );
+    this.logger.warn('Executando fallback de busca geográfica no PostgreSQL.');
 
     const lat = query.lat!;
     const lon = query.lng!;
@@ -228,6 +232,20 @@ export class EstabelecimentosService {
       )
     )`;
 
+    // Retângulo antes do Haversine: permite usar o índice (latitude, longitude), que a
+    // fórmula sozinha não usa. 1° de latitude >= 110,5 km; 1° de longitude >= 110 km * cos(lat).
+    // Folga conservadora (110): o retângulo sempre contém o círculo, o Haversine decide o resto.
+    const deltaLat = raioKm / 110;
+    const cosLat = Math.cos((lat * Math.PI) / 180);
+    condicoes.push(
+      Prisma.sql`a."latitude" BETWEEN ${lat - deltaLat} AND ${lat + deltaLat}`,
+    );
+    if (cosLat > 0.01) {
+      const deltaLon = raioKm / (110 * cosLat);
+      condicoes.push(
+        Prisma.sql`a."longitude" BETWEEN ${lon - deltaLon} AND ${lon + deltaLon}`,
+      );
+    }
     condicoes.push(Prisma.sql`${distanciaSql} <= ${raioKm}`);
 
     if (query.tipo) {
@@ -288,7 +306,7 @@ export class EstabelecimentosService {
         JOIN "enderecos" a ON a."id" = e."enderecoId"
         JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
         WHERE ${whereClausula}
-        ORDER BY distancia ASC, e."nome" ASC, e."id" ASC
+        ORDER BY ${distanciaSql} ASC, e."nome" ASC, e."id" ASC
         LIMIT ${limite} OFFSET ${offset}
       `,
     );

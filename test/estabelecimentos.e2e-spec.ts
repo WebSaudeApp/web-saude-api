@@ -266,7 +266,9 @@ describe('Estabelecimentos (e2e)', () => {
     const spyBuscarES = jest
       .spyOn(buscaService, 'buscarEstabelecimentos')
       .mockRejectedValueOnce(
-        new Error('Conexão recusada no cluster Elasticsearch'),
+        Object.assign(new Error('Conexão recusada no cluster Elasticsearch'), {
+          name: 'ConnectionError',
+        }),
       );
 
     const fallbackResponse = await request(app.getHttpServer())
