@@ -10,6 +10,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(true),
+      indiceDisponivel: jest.fn().mockResolvedValue(true),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -20,6 +21,7 @@ describe('DisponibilidadeController', () => {
       status: 'ok',
       banco: 'conectado',
       elasticsearch: 'conectado',
+      indiceBusca: 'disponivel',
     });
   });
 
@@ -29,6 +31,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(true),
+      indiceDisponivel: jest.fn().mockResolvedValue(true),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -52,6 +55,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(false),
+      indiceDisponivel: jest.fn().mockResolvedValue(false),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -62,6 +66,28 @@ describe('DisponibilidadeController', () => {
       status: 'degradado',
       banco: 'conectado',
       elasticsearch: 'desconectado',
+      indiceBusca: 'ausente',
+    });
+  });
+
+  it('responde 200 degradado quando o ES está no ar mas o índice não existe (antes do es:init)', async () => {
+    const prisma = {
+      isDatabaseConnected: jest.fn().mockResolvedValue(true),
+    };
+    const busca = {
+      estaDisponivel: jest.fn().mockResolvedValue(true),
+      indiceDisponivel: jest.fn().mockResolvedValue(false),
+    };
+    const controller = new DisponibilidadeController(
+      prisma as unknown as PrismaService,
+      busca as unknown as BuscaService,
+    );
+
+    await expect(controller.verificar()).resolves.toEqual({
+      status: 'degradado',
+      banco: 'conectado',
+      elasticsearch: 'conectado',
+      indiceBusca: 'ausente',
     });
   });
 

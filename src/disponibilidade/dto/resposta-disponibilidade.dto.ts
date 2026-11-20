@@ -20,4 +20,7 @@ export class RespostaDisponibilidadeDto {
     enum: ['conectado', 'desconectado'],
   })
   elasticsearch!: 'conectado' | 'desconectado';
+
+  @ApiProperty({ example: 'disponivel', enum: ['disponivel', 'ausente'] })
+  indiceBusca!: 'disponivel' | 'ausente';
 }

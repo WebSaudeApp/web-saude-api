@@ -25,6 +25,7 @@ describe('Disponibilidade (e2e)', () => {
       .overrideProvider(BuscaService)
       .useValue({
         estaDisponivel,
+        indiceDisponivel: jest.fn().mockResolvedValue(true),
       })
       .compile();
 
@@ -41,6 +42,7 @@ describe('Disponibilidade (e2e)', () => {
       status: 'ok',
       banco: 'conectado',
       elasticsearch: 'conectado',
+      indiceBusca: 'disponivel',
     });
   });
 
@@ -50,6 +52,7 @@ describe('Disponibilidade (e2e)', () => {
       status: 'degradado',
       banco: 'conectado',
       elasticsearch: 'desconectado',
+      indiceBusca: 'ausente',
     });
   });
 
@@ -61,6 +64,7 @@ describe('Disponibilidade (e2e)', () => {
         status: 'ok',
         banco: 'conectado',
         elasticsearch: 'conectado',
+        indiceBusca: 'disponivel',
       });
   });
 

@@ -53,6 +53,17 @@ export class BuscaService implements OnModuleInit {
     }
   }
 
+  /** O alias de busca existe? (ES no ar sem índice = antes do `es:init`: busca vai para o fallback.) */
+  async indiceDisponivel(): Promise<boolean> {
+    try {
+      return await this.elasticsearchService.indices.exists({
+        index: ALIAS_ESTABELECIMENTOS,
+      });
+    } catch {
+      return false;
+    }
+  }
+
   obterCliente(): ElasticsearchService {
     return this.elasticsearchService;
   }

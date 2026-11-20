@@ -35,15 +35,20 @@ export class DisponibilidadeController {
       this.prisma.isDatabaseConnected(),
       this.buscaService.estaDisponivel(),
     ]);
+    // ES no ar mas sem o índice (es:init não rodou) também é degradação: a busca por
+    // localização está indo toda para o fallback, e isso precisa aparecer aqui.
+    const indiceDisponivel =
+      elasticsearchConectado && (await this.buscaService.indiceDisponivel());
 
     const corpo: RespostaDisponibilidadeDto = {
       status: !bancoConectado
         ? 'erro'
-        : elasticsearchConectado
+        : elasticsearchConectado && indiceDisponivel
           ? 'ok'
           : 'degradado',
       banco: bancoConectado ? 'conectado' : 'desconectado',
       elasticsearch: elasticsearchConectado ? 'conectado' : 'desconectado',
+      indiceBusca: indiceDisponivel ? 'disponivel' : 'ausente',
     };
 
     // Só o banco decide o status HTTP (o health check da hospedagem usa esta rota).
