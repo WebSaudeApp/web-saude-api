@@ -10,7 +10,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(true),
-      indiceDisponivel: jest.fn().mockResolvedValue(true),
+      situacaoIndice: jest.fn().mockResolvedValue('disponivel'),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -31,7 +31,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(true),
-      indiceDisponivel: jest.fn().mockResolvedValue(true),
+      situacaoIndice: jest.fn().mockResolvedValue('disponivel'),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -55,7 +55,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(false),
-      indiceDisponivel: jest.fn().mockResolvedValue(false),
+      situacaoIndice: jest.fn().mockResolvedValue('ausente'),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -66,7 +66,7 @@ describe('DisponibilidadeController', () => {
       status: 'degradado',
       banco: 'conectado',
       elasticsearch: 'desconectado',
-      indiceBusca: 'ausente',
+      indiceBusca: 'desconhecido',
     });
   });
 
@@ -76,7 +76,7 @@ describe('DisponibilidadeController', () => {
     };
     const busca = {
       estaDisponivel: jest.fn().mockResolvedValue(true),
-      indiceDisponivel: jest.fn().mockResolvedValue(false),
+      situacaoIndice: jest.fn().mockResolvedValue('ausente'),
     };
     const controller = new DisponibilidadeController(
       prisma as unknown as PrismaService,
@@ -89,6 +89,49 @@ describe('DisponibilidadeController', () => {
       elasticsearch: 'conectado',
       indiceBusca: 'ausente',
     });
+  });
+
+  it('mantém status ok quando a checagem do índice é inconclusiva (403/timeout = desconhecido)', async () => {
+    const prisma = {
+      isDatabaseConnected: jest.fn().mockResolvedValue(true),
+    };
+    const busca = {
+      estaDisponivel: jest.fn().mockResolvedValue(true),
+      situacaoIndice: jest.fn().mockResolvedValue('desconhecido'),
+    };
+    const controller = new DisponibilidadeController(
+      prisma as unknown as PrismaService,
+      busca as unknown as BuscaService,
+    );
+
+    await expect(controller.verificar()).resolves.toEqual({
+      status: 'ok',
+      banco: 'conectado',
+      elasticsearch: 'conectado',
+      indiceBusca: 'desconhecido',
+    });
+  });
+
+  it('passa um prazo curto às checagens do ES (não usa o timeout padrão do cliente)', async () => {
+    const prisma = {
+      isDatabaseConnected: jest.fn().mockResolvedValue(true),
+    };
+    const busca = {
+      estaDisponivel: jest.fn().mockResolvedValue(true),
+      situacaoIndice: jest.fn().mockResolvedValue('disponivel'),
+    };
+    const controller = new DisponibilidadeController(
+      prisma as unknown as PrismaService,
+      busca as unknown as BuscaService,
+    );
+
+    await controller.verificar();
+
+    const [prazoPing] = busca.estaDisponivel.mock.calls[0] as [number];
+    const [prazoIndice] = busca.situacaoIndice.mock.calls[0] as [number];
+    expect(prazoPing).toBeGreaterThan(0);
+    expect(prazoPing).toBeLessThanOrEqual(2000);
+    expect(prazoIndice).toBe(prazoPing);
   });
 
   it('retorna mensagem api online na rota raiz', () => {

@@ -257,7 +257,7 @@ A API escuta em `http://localhost:${PORT}`.
 | Método | Rota | Auth | Descrição |
 | --- | --- | --- | --- |
 | `GET` | `/` | pública | Retorna status simplificado (`{ "mensagem": "api online" }`) |
-| `GET` | `/health` | pública (fora do rate limit) | Só o PostgreSQL decide o status HTTP: banco fora → `503` (`status: "erro"`); banco ok e Elasticsearch fora → `200` com `status: "degradado"` e `elasticsearch: "desconectado"` (a busca com localização usa o fallback no PostgreSQL); ES no ar mas sem o índice (antes do `es:init`) → `200` `degradado` com `indiceBusca: "ausente"`; tudo ok → `200` com `status: "ok"` |
+| `GET` | `/health` | pública (fora do rate limit) | Só o PostgreSQL decide o status HTTP: banco fora → `503` (`status: "erro"`); banco ok e Elasticsearch fora → `200` com `status: "degradado"` e `elasticsearch: "desconectado"` (a busca com localização usa o fallback no PostgreSQL); ES no ar mas sem o índice (antes do `es:init`) → `200` `degradado` com `indiceBusca: "ausente"`; checagem do índice inconclusiva (timeout ou chave sem permissão de metadados, 403) → `indiceBusca: "desconhecido"` sem degradar o status; as checagens do ES têm prazo de 1,5 s sem retentativas; tudo ok → `200` com `status: "ok"` |
 | `GET` | `/disponibilidade` | pública | Alias para `/health` |
 
 Exemplo de resposta **200 OK**:
