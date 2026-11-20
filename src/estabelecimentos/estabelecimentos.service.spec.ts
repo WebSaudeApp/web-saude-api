@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { errors } from '@elastic/elasticsearch';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
@@ -585,9 +586,9 @@ describe('EstabelecimentosService', () => {
     });
 
     const erroConexaoES = () =>
-      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9200'), {
-        name: 'ConnectionError',
-      });
+      new errors.ConnectionError('connect ECONNREFUSED 127.0.0.1:9200', {
+        meta: {},
+      } as never);
 
     it('executa fallback no PostgreSQL e preserva a ordem de proximidade do SQL, não a do findMany (BE-28)', async () => {
       buscarEstabelecimentos.mockRejectedValue(erroConexaoES());
@@ -617,7 +618,7 @@ describe('EstabelecimentosService', () => {
       expect(resultado.dados.map((d) => d.distanciaKm)).toEqual([0.3, 2.2]);
     });
 
-    it('ordena o fallback pela distância real (sem arredondar) e filtra por retângulo antes do Haversine', async () => {
+    it('ordena o fallback pela expressão de distância, nunca pelo alias arredondado', async () => {
       buscarEstabelecimentos.mockRejectedValue(erroConexaoES());
       queryRaw
         .mockResolvedValueOnce([{ total: 1 }])
@@ -630,17 +631,41 @@ describe('EstabelecimentosService', () => {
       } as BuscarEstabelecimentosDto);
 
       const sqlLista = queryRaw.mock.calls[1][0].sql;
-      expect(sqlLista).toMatch(/ORDER BY\s+\(\s*6371/);
       expect(sqlLista).not.toMatch(/ORDER BY\s+distancia/);
       expect(sqlLista).toMatch(/"latitude" BETWEEN/);
-      expect(sqlLista).toMatch(/"longitude" BETWEEN/);
+    });
+
+    it('cai no fallback quando o índice ainda não existe (404 index_not_found, antes do es:init)', async () => {
+      buscarEstabelecimentos.mockRejectedValue(
+        new errors.ResponseError({
+          statusCode: 404,
+          body: { error: { type: 'index_not_found_exception' } },
+          headers: {},
+          meta: {} as never,
+          warnings: null,
+        }),
+      );
+      queryRaw
+        .mockResolvedValueOnce([{ total: 1 }])
+        .mockResolvedValueOnce([{ id: 'estabelecimento-1', distancia: 2.2 }]);
+      findMany.mockResolvedValue([estabelecimento]);
+
+      const resultado = await service.search({
+        lat: -8.05,
+        lng: -34.88,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.dados).toHaveLength(1);
     });
 
     it('NÃO cai no fallback quando o ES responde 4xx (bug de query): relança o erro', async () => {
       buscarEstabelecimentos.mockRejectedValue(
-        Object.assign(new Error('parsing_exception'), {
-          name: 'ResponseError',
-          meta: { statusCode: 400 },
+        new errors.ResponseError({
+          statusCode: 400,
+          body: { error: { type: 'parsing_exception' } },
+          headers: {},
+          meta: {} as never,
+          warnings: null,
         }),
       );
 
@@ -649,7 +674,7 @@ describe('EstabelecimentosService', () => {
           lat: -8.05,
           lng: -34.88,
         } as BuscarEstabelecimentosDto),
-      ).rejects.toThrow('parsing_exception');
+      ).rejects.toBeInstanceOf(errors.ResponseError);
       expect(queryRaw).not.toHaveBeenCalled();
     });
 

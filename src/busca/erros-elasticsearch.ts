@@ -1,15 +1,12 @@
-/**
- * Decide se um erro vindo do Elasticsearch significa "o ES está indisponível" (conexão
- * recusada/resetada, timeout, sem nó vivo, HTTP 5xx). Só nesses casos a busca por
- * localização pode cair no PostgreSQL. Erros 4xx (ex.: parsing_exception, ou seja, bug na
- * query) e erros nossos (TypeError etc.) NÃO são indisponibilidade e devem ser relançados.
- */
-const NOMES_INDISPONIBILIDADE = new Set([
-  'ConnectionError',
-  'TimeoutError',
-  'NoLivingConnectionsError',
-]);
+import { errors } from '@elastic/elasticsearch';
 
+/**
+ * Decide se um erro vindo do Elasticsearch significa "o ES não consegue atender agora"
+ * (conexão/timeout/sem nó vivo, HTTP 5xx, 429 por sobrecarga, ou índice/alias ainda inexistente
+ * antes do `es:init`). Só nesses casos a busca por localização cai no PostgreSQL.
+ * Erros 400 (ex.: parsing_exception, bug de query) e erros nossos (TypeError etc.) NÃO são
+ * indisponibilidade e devem ser relançados.
+ */
 const CODIGOS_REDE = new Set([
   'ECONNREFUSED',
   'ECONNRESET',
@@ -20,21 +17,23 @@ const CODIGOS_REDE = new Set([
 ]);
 
 export function elasticsearchIndisponivel(erro: unknown): boolean {
-  if (typeof erro !== 'object' || erro === null) {
-    return false;
-  }
-  const e = erro as {
-    name?: string;
-    code?: string;
-    statusCode?: number;
-    meta?: { statusCode?: number };
-  };
-  if (e.name && NOMES_INDISPONIBILIDADE.has(e.name)) {
+  if (
+    erro instanceof errors.ConnectionError ||
+    erro instanceof errors.TimeoutError ||
+    erro instanceof errors.NoLivingConnectionsError
+  ) {
     return true;
   }
-  if (e.code && CODIGOS_REDE.has(e.code)) {
-    return true;
+
+  if (erro instanceof errors.ResponseError) {
+    const status = erro.statusCode ?? 0;
+    if (status >= 500 || status === 429) {
+      return true;
+    }
+    const body = erro.body as { error?: { type?: string } } | undefined;
+    return status === 404 && body?.error?.type === 'index_not_found_exception';
   }
-  const status = e.statusCode ?? e.meta?.statusCode;
-  return typeof status === 'number' && status >= 500;
+
+  const codigo = (erro as { code?: unknown } | null)?.code;
+  return typeof codigo === 'string' && CODIGOS_REDE.has(codigo);
 }

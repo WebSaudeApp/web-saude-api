@@ -15,6 +15,7 @@ import {
   toEnderecoUpdate,
 } from './endereco.util';
 import { elasticsearchIndisponivel } from '../busca/erros-elasticsearch';
+import { caixaDelimitadora } from './caixa-delimitadora';
 import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
 import { mapearEstabelecimentoParaDocumento } from '../busca/documento-estabelecimento';
@@ -232,18 +233,15 @@ export class EstabelecimentosService {
       )
     )`;
 
-    // Retângulo antes do Haversine: permite usar o índice (latitude, longitude), que a
-    // fórmula sozinha não usa. 1° de latitude >= 110,5 km; 1° de longitude >= 110 km * cos(lat).
-    // Folga conservadora (110): o retângulo sempre contém o círculo, o Haversine decide o resto.
-    const deltaLat = raioKm / 110;
-    const cosLat = Math.cos((lat * Math.PI) / 180);
+    // Retângulo antes do Haversine: permite ao planner usar o índice (latitude, longitude),
+    // que a fórmula sozinha não usa. O Haversine abaixo decide o limite exato.
+    const caixa = caixaDelimitadora(lat, lon, raioKm);
     condicoes.push(
-      Prisma.sql`a."latitude" BETWEEN ${lat - deltaLat} AND ${lat + deltaLat}`,
+      Prisma.sql`a."latitude" BETWEEN ${caixa.latMin} AND ${caixa.latMax}`,
     );
-    if (cosLat > 0.01) {
-      const deltaLon = raioKm / (110 * cosLat);
+    if (caixa.lonMin !== undefined && caixa.lonMax !== undefined) {
       condicoes.push(
-        Prisma.sql`a."longitude" BETWEEN ${lon - deltaLon} AND ${lon + deltaLon}`,
+        Prisma.sql`a."longitude" BETWEEN ${caixa.lonMin} AND ${caixa.lonMax}`,
       );
     }
     condicoes.push(Prisma.sql`${distanciaSql} <= ${raioKm}`);

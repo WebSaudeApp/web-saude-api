@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { errors } from '@elastic/elasticsearch';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
@@ -266,9 +267,12 @@ describe('Estabelecimentos (e2e)', () => {
     const spyBuscarES = jest
       .spyOn(buscaService, 'buscarEstabelecimentos')
       .mockRejectedValueOnce(
-        Object.assign(new Error('Conexão recusada no cluster Elasticsearch'), {
-          name: 'ConnectionError',
-        }),
+        new errors.ConnectionError(
+          'Conexão recusada no cluster Elasticsearch',
+          {
+            meta: {},
+          } as never,
+        ),
       );
 
     const fallbackResponse = await request(app.getHttpServer())

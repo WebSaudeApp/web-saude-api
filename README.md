@@ -327,7 +327,7 @@ Exemplo de resposta **200 OK**:
 ```
 
 > **Scroll Infinito**: O campo `temMais` (`pagina < totalPaginas`) informa diretamente ao front-end se há novas páginas para carregar.  
-> **Resiliência / Fallback**: Se o cluster Elasticsearch estiver indisponível (conexão, timeout ou 5xx), a busca **com localização** faz fallback transparente para o PostgreSQL. Erros 4xx do ES e erros internos não caem no fallback.
+> **Resiliência / Fallback**: Se o cluster Elasticsearch estiver indisponível (conexão, timeout, 5xx/429 ou índice inexistente), a busca **com localização** faz fallback transparente para o PostgreSQL. Erros 4xx do ES e erros internos não caem no fallback.
 
 ---
 
