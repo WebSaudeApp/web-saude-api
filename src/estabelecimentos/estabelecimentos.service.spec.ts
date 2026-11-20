@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { errors } from '@elastic/elasticsearch';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
 import { EstabelecimentosService } from './estabelecimentos.service';
+import { errors } from '@elastic/elasticsearch';
 
 describe('EstabelecimentosService', () => {
   const count = jest.fn<(args: unknown) => Promise<number>>(() =>
