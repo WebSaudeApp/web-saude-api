@@ -23,6 +23,9 @@ import {
  * - Clientes diretos sem o segredo compartilhado são rastreados exclusivamente pelo IP físico do socket
  *   (`req.socket.remoteAddress`), impedindo que invasores forjem `x-forwarded-for` para burlar o limite.
  */
+/** Quantas requisições com x-forwarded-for compõem a amostra do diagnóstico de proxy. */
+export const AMOSTRAS_DIAGNOSTICO_PROXY = 20;
+
 @Injectable()
 export class AppThrottlerGuard extends ThrottlerGuard {
   private readonly logger = new Logger(AppThrottlerGuard.name);
@@ -39,12 +42,15 @@ export class AppThrottlerGuard extends ThrottlerGuard {
   }
 
   private ultimoAvisoMs = 0;
+  private amostrasSaltos: number[] = [];
   private diagnosticoFeito = false;
 
   /**
-   * Uma única vez por processo, loga QUANTOS saltos o x-forwarded-for trouxe e quantos o
-   * Express considerou confiáveis (TRUST_PROXY). Só contagens, nunca IPs (LGPD). Serve para
-   * conferir no log da hospedagem se TRUST_PROXY bate com o número real de proxies.
+   * Diagnóstico de TRUST_PROXY: guarda QUANTAS entradas o x-forwarded-for trouxe nas primeiras
+   * requisições (só contagens, nunca IPs — LGPD) e, ao completar a amostra, loga mín./máx.
+   * Cada proxy da hospedagem acrescenta exatamente uma entrada; um cliente só consegue
+   * ACRESCENTAR entradas forjadas, nunca remover as dos proxies. Por isso o valor seguro é o
+   * MÍNIMO observado, e não o de uma requisição isolada (que pode ter sido forjada).
    */
   private diagnosticarProxy(req: Record<string, unknown>): void {
     if (this.diagnosticoFeito) {
@@ -55,13 +61,18 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     if (typeof xff !== 'string' || xff.trim() === '') {
       return;
     }
+    this.amostrasSaltos.push(xff.split(',').filter((p) => p.trim()).length);
+    if (this.amostrasSaltos.length < AMOSTRAS_DIAGNOSTICO_PROXY) {
+      return;
+    }
     this.diagnosticoFeito = true;
-    const saltos = xff.split(',').filter((p) => p.trim()).length;
-    const ips = Array.isArray(req.ips) ? req.ips.length : 0;
+    const minimo = Math.min(...this.amostrasSaltos);
+    const maximo = Math.max(...this.amostrasSaltos);
+    this.amostrasSaltos = [];
     this.logger.log(
-      `Diagnóstico de proxy: x-forwarded-for com ${saltos} entrada(s); TRUST_PROXY=${
-        this.configService.get<string>('TRUST_PROXY') ?? 'false'
-      }; req.ips com ${ips} entrada(s). TRUST_PROXY deve ser igual ao número de proxies da hospedagem (normalmente ${saltos} se o cliente não enviou o cabeçalho).`,
+      `Diagnóstico de proxy (${AMOSTRAS_DIAGNOSTICO_PROXY} requisições): x-forwarded-for com ${minimo} a ${maximo} entrada(s); ` +
+        `TRUST_PROXY atual=${this.configService.get<string>('TRUST_PROXY') ?? 'false'}. ` +
+        `Valor sugerido: ${minimo} (o mínimo; entradas a mais vêm de clientes e não devem ser confiadas).`,
     );
   }
 

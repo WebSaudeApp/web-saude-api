@@ -26,7 +26,7 @@ services:
       # ROLLOUT: defina FRONTEND_PROXY_SECRET (>= 32 caracteres) no painel do Render ANTES de
       # mergear/deployar: com NODE_ENV=production a API nao sobe sem ele.
       # A CONFIRMAR: numero de proxies do Render a frente da API. Conferir no log a linha
-      # "Diagnostico de proxy" (primeira requisicao) e ajustar se nao for 1.
+      # "Diagnostico de proxy" (apos 20 requisicoes; usar o MINIMO sugerido) e ajustar se nao for 1.
       - key: TRUST_PROXY
         value: '1'
       - key: FRONTEND_PROXY_SECRET

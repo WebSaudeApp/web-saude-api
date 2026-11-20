@@ -1,7 +1,11 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerModuleOptions, ThrottlerStorage } from '@nestjs/throttler';
-import { AppThrottlerGuard } from './app-throttler.guard';
+import {
+  AMOSTRAS_DIAGNOSTICO_PROXY,
+  AppThrottlerGuard,
+} from './app-throttler.guard';
 
 describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #59)', () => {
   let guard: AppThrottlerGuard;
@@ -149,5 +153,34 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
       guard as unknown as { getTracker: (r: unknown) => Promise<string> }
     ).getTracker(req);
     expect(tracker).toBe('direct:127.0.0.1');
+  });
+
+  it('diagnóstico de proxy recomenda o MÍNIMO de saltos da amostra, ignorando XFF forjado', async () => {
+    guard = createGuard({ TRUST_PROXY: '1' });
+    const logSpy = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => undefined);
+    const tracker = guard as unknown as {
+      getTracker: (r: unknown) => Promise<string>;
+    };
+
+    // 1ª requisição forjada pelo cliente (3 entradas); as demais vêm só do proxy (1 entrada).
+    await tracker.getTracker({
+      ip: '10.0.0.1',
+      headers: { 'x-forwarded-for': '1.1.1.1, 2.2.2.2, 203.0.113.5' },
+    });
+    expect(logSpy).not.toHaveBeenCalled();
+    for (let i = 1; i < AMOSTRAS_DIAGNOSTICO_PROXY; i++) {
+      await tracker.getTracker({
+        ip: '10.0.0.1',
+        headers: { 'x-forwarded-for': '203.0.113.5' },
+      });
+    }
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const mensagem = String(logSpy.mock.calls[0][0]);
+    expect(mensagem).toContain('Valor sugerido: 1');
+    expect(mensagem).not.toContain('203.0.113.5');
+    logSpy.mockRestore();
   });
 });
