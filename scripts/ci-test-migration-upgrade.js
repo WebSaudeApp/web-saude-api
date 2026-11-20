@@ -126,14 +126,18 @@ async function main() {
     // Insere registros mínimos para garantir que migrations aditivas não quebrem tabelas com dados
     // O seed vem da PROPRIA release base, para sempre casar com o schema dela.
     const seedBase = path.join(tempPrismaDir, 'ci', 'seed-upgrade.sql');
-    if (!fs.existsSync(seedBase)) {
-      throw new Error(
-        `prisma/ci/seed-upgrade.sql nao existe em ${baseRef}; sem dados na base o upgrade nao prova nada.`,
+    if (fs.existsSync(seedBase)) {
+      // Falha do seed derruba o job: nao pode passar em silencio.
+      run(`npx prisma db execute --file=${seedBase} --schema=${baseSchemaPath}`);
+      console.log('Dados minimos inseridos com sucesso.');
+    } else {
+      // Releases anteriores ao seed versionado (ex.: producao antes do marco zero) nao o tem, e o
+      // seed da branch atual nao casa com o schema delas. O upgrade segue sem dados, com aviso
+      // explicito, em vez de bloquear PRs (ex.: hotfix) por motivo alheio as migrations.
+      console.warn(
+        `AVISO: prisma/ci/seed-upgrade.sql nao existe em ${baseRef}; o upgrade sera testado SEM dados na base.`,
       );
     }
-    // Falha do seed derruba o job: nao pode passar em silencio.
-    run(`npx prisma db execute --file=${seedBase} --schema=${baseSchemaPath}`);
-    console.log('Dados minimos inseridos com sucesso.');
 
     console.log('\n--- Passo 4: Aplicando as migrations atuais da PR sobre o banco já existente ---');
     run('npx prisma migrate deploy');
