@@ -54,9 +54,10 @@ Se uma unidade estiver com localização imprecisa ou com coordenadas desatualiz
      }
      ```
 
-3. **Reflexo Imediato na Busca (Elasticsearch)**:
-   - Graças à sincronização em tempo real (**BE-15**), a chamada ao método `update` atualiza a tabela `enderecos` no PostgreSQL e propaga automaticamente o novo ponto `geo_point` para o Elasticsearch.
-   - A unidade passa a responder instantaneamente às buscas geográficas na nova posição, sem necessidade de reiniciar a aplicação ou reindexar manualmente.
+3. **Reflexo na Busca (Elasticsearch)**:
+   - Após o `update`, a API tenta reindexar a unidade no Elasticsearch (sincronização, **BE-16**). Essa etapa é *best effort*: se o Elasticsearch estiver fora, a falha é apenas registrada em log e a resposta da API continua de sucesso, pois o PostgreSQL é a fonte da verdade.
+   - Nesse caso o índice fica desatualizado e a unidade continua na posição antiga nas buscas por localização, até a próxima sincronização ou até rodar `npm run reindex`.
+   - Quando o Elasticsearch está disponível, a nova posição passa a valer nas buscas geográficas logo após o `update`, sem reiniciar a aplicação.
 
 4. **Correções em Lote e Recuperação**:
    - Em caso de inconsistências em massa, o comando `npm run reindex` (**BE-16**) pode ser executado para conferir e reconstruir o índice completo a partir dos dados do PostgreSQL.

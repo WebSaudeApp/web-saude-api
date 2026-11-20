@@ -9,6 +9,8 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      # NODE_ENV=production e o modo de execucao do Node, nao o nome do ambiente.
+      # Este servico (Render) e o ambiente de TESTE; producao real sera a hospedagem paga (branch `producao`).
       - key: NODE_ENV
         value: production
       - key: SWAGGER_ENABLED
