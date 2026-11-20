@@ -14,6 +14,8 @@ import {
   toEnderecoResponse,
   toEnderecoUpdate,
 } from './endereco.util';
+import { elasticsearchIndisponivel } from '../busca/erros-elasticsearch';
+import { caixaDelimitadora } from './caixa-delimitadora';
 import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
 import { mapearEstabelecimentoParaDocumento } from '../busca/documento-estabelecimento';
@@ -150,8 +152,11 @@ export class EstabelecimentosService {
     pagina: number,
     limite: number,
   ) {
+    // O try envolve SÓ a chamada ao ES: falha do PostgreSQL (findMany abaixo) é erro de banco,
+    // não indisponibilidade do ES, e não pode disparar o fallback contra o mesmo banco.
+    let resultado: Awaited<ReturnType<BuscaService['buscarEstabelecimentos']>>;
     try {
-      const resultado = await this.buscaService.buscarEstabelecimentos({
+      resultado = await this.buscaService.buscarEstabelecimentos({
         termo: query.termo,
         tipo: query.tipo,
         especialidade: query.especialidade,
@@ -165,40 +170,61 @@ export class EstabelecimentosService {
         pagina,
         limite,
       });
-
-      const ids = resultado.itens.map((item) => item.estabelecimento.id);
-      if (ids.length === 0) {
-        return paginada([], resultado.total, pagina, limite);
-      }
-
-      // Os dados completos continuam vindo do PostgreSQL (RN11)
-      const estabelecimentos = await this.prisma.estabelecimento.findMany({
-        where: { id: { in: ids } },
-        include: estabelecimentoInclude,
-      });
-
-      const mapa = new Map(estabelecimentos.map((item) => [item.id, item]));
-
-      // Preserva rigorosamente a ordem de proximidade retornada pelo Elasticsearch
-      const dados = resultado.itens
-        .map((item) => {
-          const estabelecimento = mapa.get(item.estabelecimento.id);
-          if (!estabelecimento) return null;
-          const distanciaKm =
-            item.distanciaKm !== undefined
-              ? Math.round(item.distanciaKm * 10) / 10
-              : undefined;
-          return this.toBuscaResponse(estabelecimento, distanciaKm);
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-
-      return paginada(dados, resultado.total, pagina, limite);
     } catch (erro) {
-      if (erro instanceof BadRequestException) {
+      // Só indisponibilidade do ES (conexão, timeout, 5xx/429, índice inexistente) cai no
+      // PostgreSQL. Erro 400 do ES (bug na query) ou erro nosso é relançado.
+      if (!elasticsearchIndisponivel(erro)) {
         throw erro;
       }
+      this.avisarFallback(erro);
       return this.buscarPorProximidadeFallbackPostgres(query, pagina, limite);
     }
+
+    const ids = resultado.itens.map((item) => item.estabelecimento.id);
+    if (ids.length === 0) {
+      return paginada([], resultado.total, pagina, limite);
+    }
+
+    // Os dados completos continuam vindo do PostgreSQL (RN11)
+    const estabelecimentos = await this.prisma.estabelecimento.findMany({
+      where: { id: { in: ids } },
+      include: estabelecimentoInclude,
+    });
+
+    const mapa = new Map(estabelecimentos.map((item) => [item.id, item]));
+
+    // Preserva rigorosamente a ordem de proximidade retornada pelo Elasticsearch
+    const dados = resultado.itens
+      .map((item) => {
+        const estabelecimento = mapa.get(item.estabelecimento.id);
+        if (!estabelecimento) return null;
+        const distanciaKm =
+          item.distanciaKm !== undefined
+            ? Math.round(item.distanciaKm * 10) / 10
+            : undefined;
+        return this.toBuscaResponse(estabelecimento, distanciaKm);
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return paginada(dados, resultado.total, pagina, limite);
+  }
+
+  private ultimoAvisoFallbackMs = 0;
+  private fallbacksSemAviso = 0;
+
+  /** Um aviso por minuto, com a contagem do período: não inunda o log quando o ES fica fora. */
+  private avisarFallback(erro: unknown): void {
+    this.fallbacksSemAviso += 1;
+    const agora = Date.now();
+    if (agora - this.ultimoAvisoFallbackMs < 60_000) {
+      return;
+    }
+    this.logger.warn(
+      `Elasticsearch indisponível (${erro instanceof Error ? erro.message : String(erro)}): ` +
+        `${this.fallbacksSemAviso} busca(s) por localização atendida(s) pelo fallback no PostgreSQL no último minuto.`,
+    );
+    this.ultimoAvisoFallbackMs = agora;
+    this.fallbacksSemAviso = 0;
   }
 
   private async buscarPorProximidadeFallbackPostgres(
@@ -206,10 +232,6 @@ export class EstabelecimentosService {
     pagina: number,
     limite: number,
   ) {
-    this.logger.warn(
-      'Elasticsearch indisponível. Executando fallback de busca geográfica no PostgreSQL.',
-    );
-
     const lat = query.lat!;
     const lon = query.lng!;
     const raioKm = query.raioKm ?? 10;
@@ -228,6 +250,17 @@ export class EstabelecimentosService {
       )
     )`;
 
+    // Retângulo antes do Haversine: permite ao planner usar o índice (latitude, longitude),
+    // que a fórmula sozinha não usa. O Haversine abaixo decide o limite exato.
+    const caixa = caixaDelimitadora(lat, lon, raioKm);
+    condicoes.push(
+      Prisma.sql`a."latitude" BETWEEN ${caixa.latMin} AND ${caixa.latMax}`,
+    );
+    if (caixa.lonMin !== undefined && caixa.lonMax !== undefined) {
+      condicoes.push(
+        Prisma.sql`a."longitude" BETWEEN ${caixa.lonMin} AND ${caixa.lonMax}`,
+      );
+    }
     condicoes.push(Prisma.sql`${distanciaSql} <= ${raioKm}`);
 
     if (query.tipo) {
@@ -260,38 +293,36 @@ export class EstabelecimentosService {
 
     const whereClausula = Prisma.join(condicoes, ' AND ');
 
-    const contagem = await this.prisma.$queryRaw<
-      Array<{ total: bigint | number }>
-    >(
-      Prisma.sql`
-        SELECT COUNT(*)::int AS total
-        FROM "estabelecimentos" e
-        JOIN "enderecos" a ON a."id" = e."enderecoId"
-        JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
-        WHERE ${whereClausula}
-      `,
-    );
+    // COUNT e página são independentes: em paralelo, no caminho que já está degradado.
+    const [contagem, matches] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ total: bigint | number }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::int AS total
+          FROM "estabelecimentos" e
+          JOIN "enderecos" a ON a."id" = e."enderecoId"
+          JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
+          WHERE ${whereClausula}
+        `,
+      ),
+      this.prisma.$queryRaw<Array<{ id: string; distancia: number }>>(
+        Prisma.sql`
+          SELECT
+            e."id",
+            ROUND((${distanciaSql})::numeric, 1)::float AS distancia
+          FROM "estabelecimentos" e
+          JOIN "enderecos" a ON a."id" = e."enderecoId"
+          JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
+          WHERE ${whereClausula}
+          ORDER BY ${distanciaSql} ASC, e."nome" ASC, e."id" ASC
+          LIMIT ${limite} OFFSET ${offset}
+        `,
+      ),
+    ]);
 
     const total = Number(contagem[0]?.total ?? 0);
     if (total === 0) {
       return paginada([], 0, pagina, limite);
     }
-
-    const matches = await this.prisma.$queryRaw<
-      Array<{ id: string; distancia: number }>
-    >(
-      Prisma.sql`
-        SELECT 
-          e."id",
-          ROUND((${distanciaSql})::numeric, 1)::float AS distancia
-        FROM "estabelecimentos" e
-        JOIN "enderecos" a ON a."id" = e."enderecoId"
-        JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
-        WHERE ${whereClausula}
-        ORDER BY distancia ASC, e."nome" ASC, e."id" ASC
-        LIMIT ${limite} OFFSET ${offset}
-      `,
-    );
 
     const idsPagina = matches.map((m) => m.id);
     const estabelecimentos = await this.prisma.estabelecimento.findMany({
