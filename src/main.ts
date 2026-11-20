@@ -47,6 +47,18 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
+  // Sem padrão "conveniente": por omissão nenhum proxy é confiável (req.ip = IP do socket).
+  // Em produção TRUST_PROXY é obrigatório e deve ser o número exato de proxies à frente da API.
+  const trustProxy = configService.get<string>('TRUST_PROXY', 'false').trim();
+  app.set(
+    'trust proxy',
+    trustProxy === 'false'
+      ? false
+      : /^\d+$/.test(trustProxy)
+        ? Number(trustProxy)
+        : trustProxy.split(',').map((item) => item.trim()),
+  );
+
   const swaggerEnabled = configService.get<boolean>('SWAGGER_ENABLED', false);
 
   if (swaggerEnabled) {

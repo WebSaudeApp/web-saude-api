@@ -8,6 +8,9 @@ import {
   IsString,
   Max,
   Min,
+  Matches,
+  MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -16,6 +19,16 @@ enum NodeEnv {
   Production = 'production',
   Test = 'test',
 }
+
+// TRUST_PROXY aceito: 'false', número de proxies, ou lista de keywords/IPs/CIDRs do Express
+// (ex.: 'loopback, 10.0.0.0/8'). 'true' é rejeitado de propósito: confiaria em qualquer
+// X-Forwarded-For, tornando o IP do visitante forjável. Pelo mesmo motivo, CIDR com prefixo
+// menor que /8 (ex.: 0.0.0.0/0, ::/0) é rejeitado.
+const TRUST_PROXY_ITEM =
+  '(?:loopback|linklocal|uniquelocal|[0-9a-fA-F:.]+(?:/(?:[89]|[1-9]\\d{1,2}))?)';
+export const TRUST_PROXY_PATTERN = new RegExp(
+  `^(?:false|\\d+|${TRUST_PROXY_ITEM}(?:\\s*,\\s*${TRUST_PROXY_ITEM})*)$`,
+);
 
 export class EnvironmentVariables {
   @IsEnum(NodeEnv)
@@ -58,6 +71,26 @@ export class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   ELASTICSEARCH_NODE!: string;
+
+  // Segredo compartilhado com o proxy do front (BE-34). Obrigatorio em producao: sem ele,
+  // todos os visitantes atras do proxy dividiriam um unico balde de rate limit.
+  @ValidateIf(
+    (o: EnvironmentVariables) =>
+      o.NODE_ENV === NodeEnv.Production ||
+      o.FRONTEND_PROXY_SECRET !== undefined,
+  )
+  @IsString()
+  @MinLength(32)
+  FRONTEND_PROXY_SECRET?: string;
+
+  // Número de proxies confiáveis à frente da API (ex.: 1 no Render). Obrigatório em produção:
+  // um valor errado torna o x-forwarded-for forjável ou junta todos num único balde.
+  @ValidateIf(
+    (o: EnvironmentVariables) =>
+      o.NODE_ENV === NodeEnv.Production || o.TRUST_PROXY !== undefined,
+  )
+  @Matches(TRUST_PROXY_PATTERN)
+  TRUST_PROXY?: string;
 
   @IsString()
   @IsOptional()
