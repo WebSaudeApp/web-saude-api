@@ -45,4 +45,22 @@ describe('validate (FRONTEND_PROXY_SECRET)', () => {
       validate({ ...base, ...segredo, TRUST_PROXY: 'true' }),
     ).toThrow(/TRUST_PROXY/);
   });
+
+  it('aceita TRUST_PROXY numérico, false e lista CIDR/keywords; rejeita true', () => {
+    const segredo = { FRONTEND_PROXY_SECRET: 'x'.repeat(32) };
+    for (const valor of [
+      '1',
+      '2',
+      'false',
+      'loopback, 10.0.0.0/8',
+      'uniquelocal',
+    ]) {
+      expect(() =>
+        validate({ ...base, ...segredo, TRUST_PROXY: valor }),
+      ).not.toThrow();
+    }
+    expect(() =>
+      validate({ ...base, ...segredo, TRUST_PROXY: 'true' }),
+    ).toThrow(/TRUST_PROXY/);
+  });
 });

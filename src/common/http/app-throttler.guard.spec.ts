@@ -51,6 +51,27 @@ describe('AppThrottlerGuard (Rate limit por visitante atrás de proxy - BE-34 #5
     expect(tracker).toBe('proxy:203.0.113.195');
   });
 
+  it('usa o primeiro IP válido quando o cabeçalho do visitante chega duplicado/lista', async () => {
+    guard = createGuard({
+      FRONTEND_PROXY_SECRET: 'segredo-super-seguro',
+      NODE_ENV: 'production',
+    });
+
+    const req = {
+      ip: '10.0.0.1',
+      socket: { remoteAddress: '10.0.0.1' },
+      headers: {
+        'x-frontend-proxy-secret': 'segredo-super-seguro',
+        'x-frontend-visitor-ip': 'lixo, 203.0.113.7, 198.51.100.9',
+      },
+    };
+
+    const tracker = await (
+      guard as unknown as { getTracker: (r: unknown) => Promise<string> }
+    ).getTracker(req);
+    expect(tracker).toBe('proxy:203.0.113.7');
+  });
+
   it('ignora x-forwarded-for (cadeia forjável) e IP inválido no cabeçalho do visitante', async () => {
     guard = createGuard({
       FRONTEND_PROXY_SECRET: 'segredo-super-seguro',

@@ -38,6 +38,31 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     super(options, storageService, reflector);
   }
 
+  private ultimoAvisoMs = 0;
+
+  /** Aceita um IP válido ou uma lista "a, b" (usa o primeiro IP válido); senão, undefined. */
+  private extrairIpVisitante(valor: string | undefined): string | undefined {
+    if (typeof valor !== 'string') {
+      return undefined;
+    }
+    return valor
+      .split(',')
+      .map((parte) => parte.trim())
+      .find((parte) => isIP(parte) !== 0);
+  }
+
+  /** Segredo válido sem IP utilizável: o visitante cai no balde direto; avisa 1x por minuto. */
+  private avisarIpInvalido(): void {
+    const agora = Date.now();
+    if (agora - this.ultimoAvisoMs < 60_000) {
+      return;
+    }
+    this.ultimoAvisoMs = agora;
+    this.logger.warn(
+      'Requisição com X-Frontend-Proxy-Secret válido, mas sem X-Frontend-Visitor-IP utilizável: usando o limite direto. Verifique o proxy do front.',
+    );
+  }
+
   protected async getTracker(req: Record<string, unknown>): Promise<string> {
     await Promise.resolve();
 
@@ -50,11 +75,13 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     //    Não usamos x-forwarded-for aqui: numa cadeia, a primeira entrada pode ter sido escrita
     //    pelo próprio visitante e as últimas são saltos internos.
     if (proxySecret && segredoConfere(incomingSecret, proxySecret)) {
-      const visitante = headers['x-frontend-visitor-ip'];
-      const clientIp = typeof visitante === 'string' ? visitante.trim() : '';
-      if (isIP(clientIp) !== 0) {
+      const clientIp = this.extrairIpVisitante(
+        headers['x-frontend-visitor-ip'],
+      );
+      if (clientIp) {
         return `proxy:${clientIp}`;
       }
+      this.avisarIpInvalido();
     }
 
     // 2. Conexão direta ou sem segredo de proxy válido:

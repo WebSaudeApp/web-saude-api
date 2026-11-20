@@ -20,6 +20,15 @@ enum NodeEnv {
   Test = 'test',
 }
 
+// TRUST_PROXY aceito: 'false', número de proxies, ou lista de keywords/IPs/CIDRs do Express
+// (ex.: 'loopback, 10.0.0.0/8'). 'true' é rejeitado de propósito: confiaria em qualquer
+// X-Forwarded-For, tornando o IP do visitante forjável.
+const TRUST_PROXY_ITEM =
+  '(?:loopback|linklocal|uniquelocal|[0-9a-fA-F:.]+(?:/\\d{1,3})?)';
+export const TRUST_PROXY_PATTERN = new RegExp(
+  `^(?:false|\\d+|${TRUST_PROXY_ITEM}(?:\\s*,\\s*${TRUST_PROXY_ITEM})*)$`,
+);
+
 export class EnvironmentVariables {
   @IsEnum(NodeEnv)
   NODE_ENV!: NodeEnv;
@@ -79,7 +88,7 @@ export class EnvironmentVariables {
     (o: EnvironmentVariables) =>
       o.NODE_ENV === NodeEnv.Production || o.TRUST_PROXY !== undefined,
   )
-  @Matches(/^(false|\d+)$/)
+  @Matches(TRUST_PROXY_PATTERN)
   TRUST_PROXY?: string;
 
   @IsString()
