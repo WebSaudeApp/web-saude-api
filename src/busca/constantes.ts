@@ -1,5 +1,12 @@
-export const ALIAS_ESTABELECIMENTOS = 'estabelecimentos';
-export const INDICE_ESTABELECIMENTOS_PADRAO = 'estabelecimentos_v1';
+// Sobrescrita de alias/indice so vale em testes (QA-07): em producao um env perdido nao pode
+// redirecionar leitura/escrita/reindex para outro indice.
+const emTeste = process.env.NODE_ENV === 'test';
+export const ALIAS_ESTABELECIMENTOS =
+  (emTeste && process.env.ELASTICSEARCH_ALIAS_ESTABELECIMENTOS) ||
+  'estabelecimentos';
+export const INDICE_ESTABELECIMENTOS_PADRAO =
+  (emTeste && process.env.ELASTICSEARCH_INDEX_ESTABELECIMENTOS) ||
+  'estabelecimentos_v1';
 
 export const CONFIGURACAO_INDICE_ESTABELECIMENTOS = {
   settings: {

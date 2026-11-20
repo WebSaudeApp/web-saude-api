@@ -85,6 +85,18 @@ describe('Estabelecimentos (e2e)', () => {
       }
     }
     if (app) {
+      if (unitIds.length > 0) {
+        try {
+          const buscaService = app.get(BuscaService);
+          if (await buscaService.estaDisponivel()) {
+            for (const id of unitIds) {
+              await buscaService.removerEstabelecimento(id).catch(() => {});
+            }
+          }
+        } catch {
+          // ignora se buscaService não estiver acessível
+        }
+      }
       await app.close();
     }
   });
