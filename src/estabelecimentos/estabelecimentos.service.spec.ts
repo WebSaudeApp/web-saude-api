@@ -678,6 +678,30 @@ describe('EstabelecimentosService', () => {
       expect(queryRaw).not.toHaveBeenCalled();
     });
 
+    it('falha do PostgreSQL depois do ES responder NÃO dispara o fallback (erro de banco é relançado)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [
+          { estabelecimento: { id: 'estabelecimento-1' }, distanciaKm: 1 },
+        ],
+        total: 1,
+        pagina: 1,
+        totalPaginas: 1,
+      });
+      findMany.mockRejectedValue(
+        Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+          code: 'ECONNREFUSED',
+        }),
+      );
+
+      await expect(
+        service.search({
+          lat: -8.05,
+          lng: -34.88,
+        } as BuscarEstabelecimentosDto),
+      ).rejects.toThrow('ECONNREFUSED');
+      expect(queryRaw).not.toHaveBeenCalled();
+    });
+
     it('NÃO cai no fallback quando o erro é nosso (TypeError): relança', async () => {
       buscarEstabelecimentos.mockRejectedValue(new TypeError('bug nosso'));
 
