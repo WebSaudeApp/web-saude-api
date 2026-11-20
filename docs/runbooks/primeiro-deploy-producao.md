@@ -23,7 +23,7 @@ Antes de iniciar o deploy em produção, todas as issues bloqueantes devem estar
 | **#37** | Módulo `/especialidades` ativo e funcional | `GET /especialidades` retorna lista de especialidades cadastradas (status 200). |
 | **#38** | Health check desacoplado | `GET /health` responde 200 se o PostgreSQL estiver ativo (o corpo informa `elasticsearch: desconectado`, sem mudar o status HTTP). Conferir parando o ES e chamando `/health`. |
 | **BE-31 (#53)** | Higienização de logs (LGPD) | Uma busca com `lat`, `lng` e `termo` gera log só com os **nomes** dos parâmetros (ex.: `GET /estabelecimentos [lat,lng,termo] 200 12ms`), nunca os valores. |
-| **BE-34 (#59)** | Rate limit com anti-spoofing | Cabeçalho `X-Frontend-Proxy-Secret` compartilhado entre frontend e backend para validar `X-Forwarded-For`. |
+| **BE-34 (#59)** | Rate limit com anti-spoofing | O front envia `X-Frontend-Proxy-Secret` (mesmo valor de `FRONTEND_PROXY_SECRET`) **e** `X-Frontend-Visitor-IP` (IP do visitante, sempre sobrescrito pelo front, nunca copiado do cliente). `X-Forwarded-For` não é usado nesse caminho. Conferir com dois IPs diferentes: cada um tem seu próprio limite. |
 | **QA-05 (#56)** | CI de upgrade de migrations | PR para `producao` executou o job `upgrade-migrations` com sucesso no GitHub Actions. |
 | **QA-07 (#58)** | Isolamento de testes | A guarda `guard-test-env` bloqueia testes contra banco ou ES remotos. |
 
@@ -51,6 +51,8 @@ CORS_ORIGINS="https://app.websaude.com.br,https://admin.websaude.com.br"
 THROTTLE_TTL_MS=60000
 THROTTLE_LIMIT=100
 FRONTEND_PROXY_SECRET="[GERAR-SEGREDO-CRIPTOGRAFICO-MINIMO-32-CHARS]"
+# Número EXATO de proxies confiáveis à frente da API (obrigatório em produção; 1 no Render).
+# Errado = limite forjável (x-forwarded-for) ou todos os visitantes no mesmo balde.
 TRUST_PROXY=1
 
 # Documentação Swagger (false por segurança em produção se for privada)
@@ -66,6 +68,8 @@ ELASTICSEARCH_API_KEY="[CHAVE-DE-API-DO-ELASTICSEARCH]"
 ```
 
 > **Atenção (Front-End):** No painel da interface gráfica (`web-saude-interface`), configure a variável `WEB_SAUDE_API_URL` apontando para a URL oficial da API de produção (não deixe apontando para o Render de testes).
+>
+> **Atenção (Front-End, rate limit):** o proxy do front deve enviar, em toda chamada à API, `X-Frontend-Proxy-Secret` (igual ao `FRONTEND_PROXY_SECRET` da API) e `X-Frontend-Visitor-IP` com o IP do visitante em que ele confia. Sem esses cabeçalhos todos os visitantes dividem o mesmo limite e passam a receber `429` juntos.
 
 ---
 
