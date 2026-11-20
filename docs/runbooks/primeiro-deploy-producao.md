@@ -53,7 +53,7 @@ THROTTLE_LIMIT=100
 FRONTEND_PROXY_SECRET="[GERAR-SEGREDO-CRIPTOGRAFICO-MINIMO-32-CHARS]"
 # Número EXATO de proxies confiáveis à frente da API (obrigatório em produção; 1 no Render).
 # Errado = limite forjável (x-forwarded-for) ou todos os visitantes no mesmo balde.
-TRUST_PROXY=1
+TRUST_PROXY=1   # valor inicial: confirmar pela linha "Diagnóstico de proxy" no log da API
 
 # Documentação Swagger (false por segurança em produção se for privada)
 SWAGGER_ENABLED=true
@@ -104,15 +104,46 @@ pg_dump -h [HOST_BANCO] -U postgres -d postgres -F c -b -v -f "$ARQ" && pg_resto
 *Só continue se aparecer `DUMP OK`. Guarde o arquivo em local externo e seguro.*
 
 Preferência: **recriar o banco/projeto vazio** (é o caminho que preserva extensões, papéis e permissões da hospedagem). Se for realmente preciso resetar no mesmo banco, remova **somente os objetos da aplicação** (não use `DROP SCHEMA public CASCADE`, que também apaga extensões como `unaccent` e permissões do schema `public` em bancos gerenciados como o Supabase):
+A lista de objetos vem do **banco real**, não do schema novo: o banco de teste ainda tem o schema antigo (11 migrations), com tabelas que não existem mais no código (`usuarios`, `tipos_usuario`, `reviews`, ...). Primeiro, veja o que existe:
+```sql
+-- Tabelas e tipos ENUM do schema public que NÃO pertencem a extensões
+SELECT 'tabela' AS tipo, c.relname AS nome
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+UNION ALL
+SELECT 'enum', t.typname
+FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+WHERE n.nspname = 'public' AND t.typtype = 'e'
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = t.oid AND d.deptype = 'e')
+ORDER BY 1, 2;
+```
+Confira que a lista só tem objetos da aplicação (os do schema antigo e os do novo) e `_prisma_migrations`. Se aparecer algo que não é da aplicação, **pare** e trate à parte. Depois remova exatamente esses objetos, numa transação:
 ```sql
 BEGIN;
-DROP TABLE IF EXISTS contatos, horarios_funcionamento, midias, estabelecimento_especialidades,
-  estabelecimentos, enderecos, especialidades, tipos_estabelecimento, _prisma_migrations CASCADE;
-DROP TYPE IF EXISTS "DiaSemana", "TipoContato", "TipoMidia";
--- confira o que sobrou antes de confirmar:
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+  LOOP
+    EXECUTE format('DROP TABLE IF EXISTS public.%I CASCADE', r.relname);
+  END LOOP;
+  FOR r IN
+    SELECT t.typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typtype = 'e'
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = t.oid AND d.deptype = 'e')
+  LOOP
+    EXECUTE format('DROP TYPE IF EXISTS public.%I CASCADE', r.typname);
+  END LOOP;
+END $$;
+-- deve voltar vazio antes de confirmar:
 SELECT tablename FROM pg_tables WHERE schemaname = 'public';
 COMMIT;  -- ou ROLLBACK; se algo estiver errado
 ```
+Os dados das tabelas do schema antigo (usuários, avaliações) ficam só no dump do passo anterior: essa é a decisão do marco zero.
 A extensão `unaccent` é recriada pela própria migration (`CREATE EXTENSION IF NOT EXISTS`).
 
 ### Passo 4.2: Aplicação das migrations
