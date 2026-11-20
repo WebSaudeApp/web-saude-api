@@ -58,6 +58,37 @@ describe('BuscaService', () => {
     expect(elasticsearchMock.ping).toHaveBeenCalled();
   });
 
+  it('ping com prazo usa requestTimeout próprio e sem retentativas', async () => {
+    const elasticsearchMock = { ping: jest.fn().mockResolvedValue(true) };
+    const service = new BuscaService(
+      elasticsearchMock as unknown as ElasticsearchService,
+    );
+
+    await service.estaDisponivel(1500);
+
+    expect(elasticsearchMock.ping).toHaveBeenCalledWith(
+      {},
+      { requestTimeout: 1500, maxRetries: 0 },
+    );
+  });
+
+  it('situacaoIndice: true = disponivel, false (404) = ausente, erro (403/timeout) = desconhecido', async () => {
+    const exists = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('security_exception'), { statusCode: 403 }),
+      );
+    const service = new BuscaService({
+      indices: { exists },
+    } as unknown as ElasticsearchService);
+
+    await expect(service.situacaoIndice(1500)).resolves.toBe('disponivel');
+    await expect(service.situacaoIndice(1500)).resolves.toBe('ausente');
+    await expect(service.situacaoIndice(1500)).resolves.toBe('desconhecido');
+  });
+
   it('fornece acesso ao cliente do Elasticsearch', () => {
     const elasticsearchMock = {
       ping: jest.fn(),

@@ -257,7 +257,7 @@ A API escuta em `http://localhost:${PORT}`.
 | Método | Rota | Auth | Descrição |
 | --- | --- | --- | --- |
 | `GET` | `/` | pública | Retorna status simplificado (`{ "mensagem": "api online" }`) |
-| `GET` | `/health` | pública (fora do rate limit) | Verifica integridade do PostgreSQL e do cluster Elasticsearch |
+| `GET` | `/health` | pública (fora do rate limit) | Só o PostgreSQL decide o status HTTP: banco fora → `503` (`status: "erro"`); banco ok e Elasticsearch fora → `200` com `status: "degradado"` e `elasticsearch: "desconectado"` (a busca com localização usa o fallback no PostgreSQL); ES no ar mas sem o índice (antes do `es:init`) → `200` `degradado` com `indiceBusca: "ausente"`; checagem do índice inconclusiva (timeout ou chave sem permissão de metadados, 403) → `indiceBusca: "desconhecido"` sem degradar o status; as checagens do ES têm prazo de 1,5 s sem retentativas; tudo ok → `200` com `status: "ok"` |
 | `GET` | `/disponibilidade` | pública | Alias para `/health` |
 
 Exemplo de resposta **200 OK**:
@@ -409,9 +409,15 @@ web-saude-api/
 - **ValidationPipe** — `whitelist`, `forbidNonWhitelisted`, `transform`
 - **Secrets** — somente no `.env`, nunca no código
 
-O que **nunca** deve ir para logs: senha, JWT, refresh token, código de e-mail, token de recuperação, connection string.
+### Privacidade e Anonimização de Logs (LGPD — BE-31)
 
-Cada request autenticado ou público gera uma linha `METHOD /path status duração`. Corpos e headers sensíveis não são logados. Erros 500 vão para o logger sem stack na resposta HTTP.
+- O que **nunca** deve ir para logs: dados de geolocalização (`lat`, `lng`), termos de busca, especialidades, senhas, tokens JWT, códigos de recuperação e connection strings.
+- **Formato dos logs:** Cada request gera uma linha com `MÉTODO /caminho [nomes_parametros] status duração` (ex.: `GET /estabelecimentos [especialidade,lat,lng,termo] 200 12ms`). Registra-se apenas a rota e os **nomes** dos parâmetros recebidos na query, **nunca seus valores**, protegendo a privacidade e localização do visitante conforme a LGPD.
+- Corpos e headers sensíveis não são logados. Erros 500 e 503 vão para o logger sem dados de requisição nem stack trace na resposta HTTP.
+
+#### Retenção de Logs na Hospedagem
+- **Ambiente de Teste (Render):** O Render retém os logs de execução da aplicação por **7 dias** no plano padrão.
+- **Ambiente de Produção (Hospedagem definitiva):** Retenção máxima de logs operacionais configurada para **7 a 30 dias** com rotação automática, respeitando o princípio de minimização de dados e armazenamento da LGPD.
 
 ---
 

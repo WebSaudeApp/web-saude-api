@@ -8,6 +8,7 @@ import { BuscaService } from '../src/busca/busca.service';
 
 describe('Disponibilidade (e2e)', () => {
   let app: INestApplication<App>;
+  const estaDisponivel = jest.fn().mockResolvedValue(true);
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -23,7 +24,8 @@ describe('Disponibilidade (e2e)', () => {
       })
       .overrideProvider(BuscaService)
       .useValue({
-        estaDisponivel: jest.fn().mockResolvedValue(true),
+        estaDisponivel,
+        situacaoIndice: jest.fn().mockResolvedValue('disponivel'),
       })
       .compile();
 
@@ -40,6 +42,17 @@ describe('Disponibilidade (e2e)', () => {
       status: 'ok',
       banco: 'conectado',
       elasticsearch: 'conectado',
+      indiceBusca: 'disponivel',
+    });
+  });
+
+  it('GET /health responde 200 com status degradado quando só o elasticsearch está fora', async () => {
+    estaDisponivel.mockResolvedValueOnce(false);
+    await request(app.getHttpServer()).get('/health').expect(200).expect({
+      status: 'degradado',
+      banco: 'conectado',
+      elasticsearch: 'desconectado',
+      indiceBusca: 'desconhecido',
     });
   });
 
@@ -51,6 +64,7 @@ describe('Disponibilidade (e2e)', () => {
         status: 'ok',
         banco: 'conectado',
         elasticsearch: 'conectado',
+        indiceBusca: 'disponivel',
       });
   });
 
