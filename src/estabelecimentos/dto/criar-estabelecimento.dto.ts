@@ -9,8 +9,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ContatoDto } from '../../common/dto/contato.dto';
-import { EnderecoDto } from '../../common/dto/endereco.dto';
+import { ContatoDto } from './contato.dto';
+import { EnderecoDto } from './endereco.dto';
 
 export class CriarEstabelecimentoDto {
   @ApiProperty({ example: 'Hospital Recife' })

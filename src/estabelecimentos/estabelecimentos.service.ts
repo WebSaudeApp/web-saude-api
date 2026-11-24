@@ -1,20 +1,24 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, TipoMidia } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { normalizeContatos } from '../common/contatos.util';
+import { normalizeContatos } from './contatos.util';
 import { paginada } from '../common/dto/paginacao-query.dto';
+import { validarRegrasGeograficas } from './dto/parse-buscar-estabelecimentos-query';
 import {
   toEnderecoCreate,
   toEnderecoResponse,
   toEnderecoUpdate,
-} from '../common/endereco.util';
+} from './endereco.util';
+import { elasticsearchIndisponivel } from '../busca/erros-elasticsearch';
+import { caixaDelimitadora } from './caixa-delimitadora';
 import { PrismaService } from '../database/prisma.service';
-import { arredondarNota } from '../reviews/nota.util';
-import { EspecialidadesService } from '../especialidades/especialidades.service';
+import { BuscaService } from '../busca/busca.service';
+import { mapearEstabelecimentoParaDocumento } from '../busca/documento-estabelecimento';
 import { AdicionarMidiaDto } from './dto/adicionar-midia.dto';
 import { CriarEstabelecimentoDto } from './dto/criar-estabelecimento.dto';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
@@ -28,7 +32,6 @@ import {
   MAX_IMAGE_SIZE_BYTES,
   MAX_UNIT_IMAGES,
   publicImageUrl,
-  removeUploadedFile,
 } from './midia.util';
 
 const estabelecimentoInclude = {
@@ -51,12 +54,9 @@ type EstabelecimentoCompleto = Prisma.EstabelecimentoGetPayload<{
 
 type Nota = { notaMedia: number; totalReviews: number };
 
-const CARACTERES_ACENTUADOS = 'áàâãäéèêëíìîïóòôõöúùûüç';
-const CARACTERES_SEM_ACENTO = 'aaaaaeeeeiiiiooooouuuuc';
-
 // Os tipos ficam gravados em maiúsculas: HOSPITAL e CLINICA (RN05).
-export function tipoEstabelecimentoArmazenado(tipo: string): string {
-  return tipo.trim().toLocaleUpperCase('pt-BR');
+function tipoEstabelecimentoArmazenado(tipo: string): string {
+  return normalizarTexto(tipo).toUpperCase();
 }
 
 function normalizarTexto(texto: string): string {
@@ -69,9 +69,11 @@ function normalizarTexto(texto: string): string {
 
 @Injectable()
 export class EstabelecimentosService {
+  private readonly logger = new Logger(EstabelecimentosService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly especialidadesService: EspecialidadesService,
+    private readonly buscaService: BuscaService,
   ) {}
 
   listTypes() {
@@ -81,8 +83,23 @@ export class EstabelecimentosService {
   }
 
   async search(query: BuscarEstabelecimentosDto) {
+    const errosGeograficos = validarRegrasGeograficas(query);
+    if (errosGeograficos.length > 0) {
+      throw new BadRequestException({
+        status: 400,
+        mensagem: 'Parâmetros inválidos.',
+        erros: errosGeograficos,
+      });
+    }
+
     const pagina = query.pagina ?? 1;
     const limite = query.limite ?? 20;
+
+    // Busca por proximidade geográfica usando o Elasticsearch quando lat e lng forem informados
+    if (query.lat !== undefined && query.lng !== undefined) {
+      return this.buscarPorProximidade(query, pagina, limite);
+    }
+
     const where: Prisma.EstabelecimentoWhereInput = {};
 
     if (query.tipo) {
@@ -130,6 +147,206 @@ export class EstabelecimentosService {
     );
   }
 
+  private async buscarPorProximidade(
+    query: BuscarEstabelecimentosDto,
+    pagina: number,
+    limite: number,
+  ) {
+    // O try envolve SÓ a chamada ao ES: falha do PostgreSQL (findMany abaixo) é erro de banco,
+    // não indisponibilidade do ES, e não pode disparar o fallback contra o mesmo banco.
+    let resultado: Awaited<ReturnType<BuscaService['buscarEstabelecimentos']>>;
+    try {
+      resultado = await this.buscaService.buscarEstabelecimentos({
+        termo: query.termo,
+        tipo: query.tipo,
+        especialidade: query.especialidade,
+        cidade: query.cidade,
+        estado: query.estado,
+        localizacao: {
+          lat: query.lat!,
+          lon: query.lng!,
+          raioKm: query.raioKm ?? 10,
+        },
+        pagina,
+        limite,
+      });
+    } catch (erro) {
+      // Só indisponibilidade do ES (conexão, timeout, 5xx/429, índice inexistente) cai no
+      // PostgreSQL. Erro 400 do ES (bug na query) ou erro nosso é relançado.
+      if (!elasticsearchIndisponivel(erro)) {
+        throw erro;
+      }
+      this.avisarFallback(erro);
+      return this.buscarPorProximidadeFallbackPostgres(query, pagina, limite);
+    }
+
+    const ids = resultado.itens.map((item) => item.estabelecimento.id);
+    if (ids.length === 0) {
+      return paginada([], resultado.total, pagina, limite);
+    }
+
+    // Os dados completos continuam vindo do PostgreSQL (RN11)
+    const estabelecimentos = await this.prisma.estabelecimento.findMany({
+      where: { id: { in: ids } },
+      include: estabelecimentoInclude,
+    });
+
+    const mapa = new Map(estabelecimentos.map((item) => [item.id, item]));
+
+    // Preserva rigorosamente a ordem de proximidade retornada pelo Elasticsearch
+    const dados = resultado.itens
+      .map((item) => {
+        const estabelecimento = mapa.get(item.estabelecimento.id);
+        if (!estabelecimento) return null;
+        const distanciaKm =
+          item.distanciaKm !== undefined
+            ? Math.round(item.distanciaKm * 10) / 10
+            : undefined;
+        return this.toBuscaResponse(estabelecimento, distanciaKm);
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return paginada(dados, resultado.total, pagina, limite);
+  }
+
+  private ultimoAvisoFallbackMs = 0;
+  private fallbacksSemAviso = 0;
+
+  /**
+   * No máximo um aviso de fallback por minuto, com a contagem desde o aviso anterior.
+   * Não reduz o log como um todo: o BuscaService ainda registra um erro por busca que falha
+   * no ES. Isso fica para a BE-42 (#75).
+   */
+  private avisarFallback(erro: unknown): void {
+    this.fallbacksSemAviso += 1;
+    const agora = Date.now();
+    if (agora - this.ultimoAvisoFallbackMs < 60_000) {
+      return;
+    }
+    this.logger.warn(
+      `Elasticsearch indisponível (${erro instanceof Error ? erro.message : String(erro)}): ` +
+        `${this.fallbacksSemAviso} busca(s) por localização atendida(s) pelo fallback no PostgreSQL desde o último aviso.`,
+    );
+    this.ultimoAvisoFallbackMs = agora;
+    this.fallbacksSemAviso = 0;
+  }
+
+  private async buscarPorProximidadeFallbackPostgres(
+    query: BuscarEstabelecimentosDto,
+    pagina: number,
+    limite: number,
+  ) {
+    const lat = query.lat!;
+    const lon = query.lng!;
+    const raioKm = query.raioKm ?? 10;
+    const offset = (pagina - 1) * limite;
+
+    const condicoes: Prisma.Sql[] = [];
+
+    // Fórmula de Haversine para cálculo de distância geodésica em km (raio da Terra = 6371 km)
+    const distanciaSql = Prisma.sql`(
+      6371 * acos(
+        least(1.0, greatest(-1.0,
+          cos(radians(${lat})) * cos(radians(a."latitude")) *
+          cos(radians(a."longitude") - radians(${lon})) +
+          sin(radians(${lat})) * sin(radians(a."latitude"))
+        ))
+      )
+    )`;
+
+    // Retângulo antes do Haversine: permite ao planner usar o índice (latitude, longitude),
+    // que a fórmula sozinha não usa. O Haversine abaixo decide o limite exato.
+    const caixa = caixaDelimitadora(lat, lon, raioKm);
+    condicoes.push(
+      Prisma.sql`a."latitude" BETWEEN ${caixa.latMin} AND ${caixa.latMax}`,
+    );
+    if (caixa.lonMin !== undefined && caixa.lonMax !== undefined) {
+      condicoes.push(
+        Prisma.sql`a."longitude" BETWEEN ${caixa.lonMin} AND ${caixa.lonMax}`,
+      );
+    }
+    condicoes.push(Prisma.sql`${distanciaSql} <= ${raioKm}`);
+
+    if (query.tipo) {
+      const tipoArmazenado = tipoEstabelecimentoArmazenado(query.tipo);
+      condicoes.push(
+        Prisma.sql`unaccent(lower(t."nome")) = unaccent(lower(${tipoArmazenado}))`,
+      );
+    }
+
+    if (query.estado) {
+      condicoes.push(
+        Prisma.sql`lower(a."estado") = lower(${query.estado.trim()})`,
+      );
+    }
+
+    const texto = query.termo?.trim();
+    const cidade = query.cidade?.trim();
+    const especialidade = query.especialidade?.trim();
+    if (texto || cidade || especialidade) {
+      const idsTexto = await this.filtrarTexto({
+        texto,
+        cidade,
+        especialidade,
+      });
+      if (idsTexto.length === 0) {
+        return paginada([], 0, pagina, limite);
+      }
+      condicoes.push(Prisma.sql`e."id" IN (${Prisma.join(idsTexto)})`);
+    }
+
+    const whereClausula = Prisma.join(condicoes, ' AND ');
+
+    // COUNT e página são independentes: em paralelo, no caminho que já está degradado.
+    const [contagem, matches] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ total: bigint | number }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::int AS total
+          FROM "estabelecimentos" e
+          JOIN "enderecos" a ON a."id" = e."enderecoId"
+          JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
+          WHERE ${whereClausula}
+        `,
+      ),
+      this.prisma.$queryRaw<Array<{ id: string; distancia: number }>>(
+        Prisma.sql`
+          SELECT
+            e."id",
+            ROUND((${distanciaSql})::numeric, 1)::float AS distancia
+          FROM "estabelecimentos" e
+          JOIN "enderecos" a ON a."id" = e."enderecoId"
+          JOIN "tipos_estabelecimento" t ON t."id" = e."tipoId"
+          WHERE ${whereClausula}
+          ORDER BY ${distanciaSql} ASC, e."nome" ASC, e."id" ASC
+          LIMIT ${limite} OFFSET ${offset}
+        `,
+      ),
+    ]);
+
+    const total = Number(contagem[0]?.total ?? 0);
+    if (total === 0) {
+      return paginada([], 0, pagina, limite);
+    }
+
+    const idsPagina = matches.map((m) => m.id);
+    const estabelecimentos = await this.prisma.estabelecimento.findMany({
+      where: { id: { in: idsPagina } },
+      include: estabelecimentoInclude,
+    });
+
+    const mapa = new Map(estabelecimentos.map((e) => [e.id, e]));
+
+    const dados = matches
+      .map((item) => {
+        const estab = mapa.get(item.id);
+        if (!estab) return null;
+        return this.toBuscaResponse(estab, item.distancia);
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return paginada(dados, total, pagina, limite);
+  }
+
   private async filtrarTexto(filtros: {
     texto?: string;
     cidade?: string;
@@ -148,21 +365,21 @@ export class EstabelecimentosService {
 
     if (textoNormalizado) {
       condicoes.push(Prisma.sql`(
-        strpos(translate(lower(e."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
-        OR strpos(translate(lower(a."cidade"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
-        OR strpos(translate(lower(a."bairro"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+        strpos(unaccent(lower(e."nome")), ${textoNormalizado}) > 0
+        OR strpos(unaccent(lower(a."cidade")), ${textoNormalizado}) > 0
+        OR strpos(unaccent(lower(a."bairro")), ${textoNormalizado}) > 0
         OR EXISTS (
           SELECT 1
           FROM "estabelecimento_especialidades" ee
           JOIN "especialidades" esp ON esp."id" = ee."especialidadeId"
           WHERE ee."estabelecimentoId" = e."id"
-            AND strpos(translate(lower(esp."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}), ${textoNormalizado}) > 0
+            AND strpos(unaccent(lower(esp."nome")), ${textoNormalizado}) > 0
         )
       )`);
     }
     if (cidadeNormalizada) {
       condicoes.push(
-        Prisma.sql`translate(lower(a."cidade"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = ${cidadeNormalizada}`,
+        Prisma.sql`unaccent(lower(a."cidade")) = ${cidadeNormalizada}`,
       );
     }
     if (filtros.especialidade && especialidadeNormalizada) {
@@ -173,7 +390,7 @@ export class EstabelecimentosService {
         WHERE ee."estabelecimentoId" = e."id"
           AND (
             esp."id" = ${filtros.especialidade}
-            OR translate(lower(esp."nome"), ${CARACTERES_ACENTUADOS}, ${CARACTERES_SEM_ACENTO}) = ${especialidadeNormalizada}
+            OR unaccent(lower(esp."nome")) = ${especialidadeNormalizada}
           )
       )`);
     }
@@ -195,7 +412,7 @@ export class EstabelecimentosService {
 
   async findOne(id: string) {
     const estabelecimento = await this.findExisting(id);
-    const notas = await this.notas([id]);
+    const notas = this.notas([id]);
     return this.toResponse(estabelecimento, notas.get(id));
   }
 
@@ -210,7 +427,9 @@ export class EstabelecimentosService {
         contatos: { create: contatos },
       },
     });
-    return this.findOne(estabelecimento.id);
+    const resposta = await this.findOne(estabelecimento.id);
+    await this.sincronizarComElasticsearch(estabelecimento.id);
+    return resposta;
   }
 
   async update(id: string, dto: AtualizarEstabelecimentoDto) {
@@ -230,7 +449,9 @@ export class EstabelecimentosService {
       };
     }
     await this.prisma.estabelecimento.update({ where: { id }, data });
-    return this.findOne(id);
+    const resposta = await this.findOne(id);
+    await this.sincronizarComElasticsearch(id);
+    return resposta;
   }
 
   async remove(id: string) {
@@ -241,12 +462,13 @@ export class EstabelecimentosService {
         where: { id: estabelecimento.enderecoId },
       }),
     ]);
+    await this.removerDoElasticsearch(id);
     return { message: 'Estabelecimento removido.' };
   }
 
   async setSpecialties(id: string, dto: DefinirEspecialidadesDto) {
     await this.findExisting(id);
-    await this.especialidadesService.assertIdsExist(dto.especialidadeIds);
+    await this.assertEspecialidadesExist(dto.especialidadeIds);
     await this.prisma.$transaction([
       this.prisma.estabelecimentoEspecialidade.deleteMany({
         where: { estabelecimentoId: id },
@@ -258,7 +480,9 @@ export class EstabelecimentosService {
         })),
       }),
     ]);
-    return this.findOne(id);
+    const resposta = await this.findOne(id);
+    await this.sincronizarComElasticsearch(id);
+    return resposta;
   }
 
   async setOpeningHours(id: string, dto: DefinirHorariosDto) {
@@ -290,7 +514,78 @@ export class EstabelecimentosService {
       }),
       this.prisma.horarioFuncionamento.createMany({ data: horarios }),
     ]);
-    return this.findOne(id);
+    const resposta = await this.findOne(id);
+    await this.sincronizarComElasticsearch(id);
+    return resposta;
+  }
+
+  async sincronizarComElasticsearch(id: string): Promise<void> {
+    try {
+      const resposta = await this.findOne(id);
+      const documento = mapearEstabelecimentoParaDocumento(resposta);
+      await this.buscaService.indexarEstabelecimento(documento);
+    } catch (erro) {
+      this.logger.warn(
+        `Falha ao sincronizar estabelecimento ${id} no Elasticsearch: ${String(erro)}`,
+      );
+    }
+  }
+
+  async removerDoElasticsearch(id: string): Promise<void> {
+    try {
+      await this.buscaService.removerEstabelecimento(id);
+    } catch (erro) {
+      this.logger.warn(
+        `Falha ao remover estabelecimento ${id} do Elasticsearch: ${String(erro)}`,
+      );
+    }
+  }
+
+  async reindexarTodos(): Promise<{
+    total: number;
+    indexados: number;
+    erros: number;
+    falhas: Array<{ id: string; erro: string }>;
+  }> {
+    const todos = await this.prisma.estabelecimento.findMany({
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+
+    let indexados = 0;
+    let erros = 0;
+    const falhas: Array<{ id: string; erro: string }> = [];
+
+    for (const item of todos) {
+      try {
+        const resposta = await this.findOne(item.id);
+        const documento = mapearEstabelecimentoParaDocumento(resposta);
+        await this.buscaService.indexarEstabelecimento(documento);
+        indexados++;
+      } catch (erro) {
+        erros++;
+        const mensagem = String(erro);
+        this.logger.error(
+          `Falha ao reindexar estabelecimento ${item.id}: ${mensagem}`,
+        );
+        falhas.push({ id: item.id, erro: mensagem });
+      }
+    }
+
+    try {
+      await this.buscaService
+        .obterCliente()
+        .indices.refresh({ index: 'estabelecimentos' });
+    } catch {
+      // Se refresh falhar, não impede o resultado
+    }
+
+    return {
+      total: todos.length,
+      indexados,
+      erros,
+      falhas,
+    };
   }
 
   async addImage(
@@ -338,8 +633,20 @@ export class EstabelecimentosService {
       throw new NotFoundException('Imagem não encontrada.');
     }
     await this.prisma.midia.delete({ where: { id: midiaId } });
-    await removeUploadedFile(midia.url);
     return this.findOne(id);
+  }
+
+  private async assertEspecialidadesExist(ids: string[]): Promise<void> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) {
+      return;
+    }
+    const count = await this.prisma.especialidade.count({
+      where: { id: { in: unique } },
+    });
+    if (count !== unique.length) {
+      throw new NotFoundException('Uma ou mais especialidades não existem.');
+    }
   }
 
   private async findExisting(id: string): Promise<EstabelecimentoCompleto> {
@@ -365,22 +672,16 @@ export class EstabelecimentosService {
     return tipo.id;
   }
 
-  private async notas(ids: string[]): Promise<Map<string, Nota>> {
+  private notas(ids: string[]): Map<string, Nota> {
     if (ids.length === 0) {
       return new Map();
     }
-    const grupos = await this.prisma.review.groupBy({
-      by: ['estabelecimentoId'],
-      where: { estabelecimentoId: { in: ids } },
-      _avg: { nota: true },
-      _count: { _all: true },
-    });
     return new Map(
-      grupos.map((grupo) => [
-        grupo.estabelecimentoId,
+      ids.map((id) => [
+        id,
         {
-          notaMedia: arredondarNota(grupo._avg.nota),
-          totalReviews: grupo._count._all,
+          notaMedia: 0,
+          totalReviews: 0,
         },
       ]),
     );
@@ -394,7 +695,7 @@ export class EstabelecimentosService {
     };
   }
 
-  private toBuscaResponse(item: EstabelecimentoCompleto) {
+  private toBuscaResponse(item: EstabelecimentoCompleto, distanciaKm?: number) {
     return {
       id: item.id,
       nome: item.nome,
@@ -416,6 +717,7 @@ export class EstabelecimentosService {
         atende24h: horario.atende24h,
       })),
       midias: item.midias,
+      ...(distanciaKm !== undefined ? { distanciaKm } : {}),
     };
   }
 }

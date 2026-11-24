@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   Min,
@@ -53,6 +54,22 @@ export class EnvironmentVariables {
   )
   @IsBoolean()
   SWAGGER_ENABLED!: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  ELASTICSEARCH_NODE!: string;
+
+  @IsString()
+  @IsOptional()
+  ELASTICSEARCH_USERNAME?: string;
+
+  @IsString()
+  @IsOptional()
+  ELASTICSEARCH_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  ELASTICSEARCH_API_KEY?: string;
 }
 
 export function validate(

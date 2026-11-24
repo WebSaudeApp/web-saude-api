@@ -35,10 +35,6 @@ async function bootstrap(): Promise<void> {
     origin: corsOrigins,
     credentials: true,
   });
-
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
-  });
   app.useStaticAssets(join(process.cwd(), 'docs-assets'), {
     prefix: '/docs-assets/',
   });

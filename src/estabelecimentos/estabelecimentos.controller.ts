@@ -14,9 +14,6 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
-import { PaginacaoQueryDto } from '../common/dto/paginacao-query.dto';
-import { CriarReviewDto } from '../reviews/dto/criar-review.dto';
-import { ReviewsService } from '../reviews/reviews.service';
 import { AdicionarMidiaDto } from './dto/adicionar-midia.dto';
 import { CriarEstabelecimentoDto } from './dto/criar-estabelecimento.dto';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
@@ -31,11 +28,14 @@ import { MAX_IMAGE_SIZE_BYTES } from './midia.util';
 export class EstabelecimentosController {
   constructor(
     private readonly estabelecimentosService: EstabelecimentosService,
-    private readonly reviewsService: ReviewsService,
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Busca estabelecimentos com filtros e paginação' })
+  @ApiOperation({
+    summary: 'Busca estabelecimentos com filtros e proximidade geográfica',
+    description:
+      'Pesquisa estabelecimentos por filtros (termo, tipo, especialidade, cidade, estado) e por proximidade geográfica informando latitude (lat), longitude (lng) e raio opcional em km (raioKm).',
+  })
   search(@Query() query: BuscarEstabelecimentosDto) {
     return this.estabelecimentosService.search(query);
   }
@@ -83,18 +83,6 @@ export class EstabelecimentosController {
   @ApiOperation({ summary: 'Define os horários de funcionamento' })
   setOpeningHours(@Param('id') id: string, @Body() dto: DefinirHorariosDto) {
     return this.estabelecimentosService.setOpeningHours(id, dto);
-  }
-
-  @Get(':id/reviews')
-  @ApiOperation({ summary: 'Lista as avaliações do estabelecimento' })
-  listReviews(@Param('id') id: string, @Query() query: PaginacaoQueryDto) {
-    return this.reviewsService.listByEstabelecimento(id, query);
-  }
-
-  @Post(':id/reviews')
-  @ApiOperation({ summary: 'Avalia um estabelecimento' })
-  createReview(@Param('id') id: string, @Body() dto: CriarReviewDto) {
-    return this.reviewsService.create(id, dto);
   }
 
   @Post(':id/midias')

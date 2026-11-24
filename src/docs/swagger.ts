@@ -23,14 +23,14 @@ export function setupSwagger(app: INestApplication): void {
   }
 
   const config = builder
-    .addTag('Disponibilidade', 'Status da API e conexão com o PostgreSQL')
+    .addTag(
+      'Disponibilidade',
+      'Status da API e conexão com o PostgreSQL e Elasticsearch',
+    )
     .addTag(
       'Estabelecimentos',
       'Busca e cadastro de estabelecimentos, horários, especialidades e fotos',
     )
-    .addTag('Usuários', 'Cadastro de usuários, endereço e contatos')
-    .addTag('Especialidades', 'Cadastro de especialidades médicas')
-    .addTag('Avaliações', 'Edição e exclusão de avaliações')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

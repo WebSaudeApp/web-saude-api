@@ -17,6 +17,10 @@ export class EspecialidadesService {
     });
   }
 
+  async findOne(id: string) {
+    return this.findOrThrow(id);
+  }
+
   async create(dto: CriarEspecialidadeDto) {
     try {
       return await this.prisma.especialidade.create({

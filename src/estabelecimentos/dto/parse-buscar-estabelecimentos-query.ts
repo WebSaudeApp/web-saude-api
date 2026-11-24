@@ -29,6 +29,38 @@ function validationErrors(
   });
 }
 
+export function validarRegrasGeograficas(
+  query: BuscarEstabelecimentosDto,
+): Array<{ campo: string; mensagem: string }> {
+  const erros: Array<{ campo: string; mensagem: string }> = [];
+
+  const temLat = query.lat !== undefined && query.lat !== null;
+  const temLng = query.lng !== undefined && query.lng !== null;
+  const temRaio = query.raioKm !== undefined && query.raioKm !== null;
+
+  if (temLat && !temLng) {
+    erros.push({
+      campo: 'lng',
+      mensagem: 'Latitude e longitude devem ser enviadas juntas.',
+    });
+  } else if (!temLat && temLng) {
+    erros.push({
+      campo: 'lat',
+      mensagem: 'Latitude e longitude devem ser enviadas juntas.',
+    });
+  }
+
+  if (temRaio && (!temLat || !temLng)) {
+    erros.push({
+      campo: 'raioKm',
+      mensagem:
+        'O raio em km só pode ser informado junto com a latitude e a longitude.',
+    });
+  }
+
+  return erros;
+}
+
 export function parseBuscarEstabelecimentosQuery(
   rawQuery: Record<string, unknown>,
 ): BuscarEstabelecimentosDto {
@@ -37,11 +69,16 @@ export function parseBuscarEstabelecimentosQuery(
     whitelist: true,
     forbidNonWhitelisted: true,
   });
-  if (errors.length > 0) {
+
+  const todosErros = validationErrors(errors);
+  const errosGeograficos = validarRegrasGeograficas(query);
+  todosErros.push(...errosGeograficos);
+
+  if (todosErros.length > 0) {
     throw new BadRequestException({
       status: 400,
       mensagem: 'Parâmetros inválidos.',
-      erros: validationErrors(errors),
+      erros: todosErros,
     });
   }
   return query;

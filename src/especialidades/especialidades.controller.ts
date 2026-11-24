@@ -17,13 +17,19 @@ export class EspecialidadesController {
   constructor(private readonly especialidadesService: EspecialidadesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista especialidades' })
+  @ApiOperation({ summary: 'Lista todas as especialidades cadastradas' })
   list() {
     return this.especialidadesService.list();
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Detalha uma especialidade pelo ID' })
+  findOne(@Param('id') id: string) {
+    return this.especialidadesService.findOne(id);
+  }
+
   @Post()
-  @ApiOperation({ summary: 'Cadastra uma especialidade' })
+  @ApiOperation({ summary: 'Cadastra uma nova especialidade' })
   create(@Body() dto: CriarEspecialidadeDto) {
     return this.especialidadesService.create(dto);
   }
