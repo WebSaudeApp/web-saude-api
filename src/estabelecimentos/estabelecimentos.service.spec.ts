@@ -5,6 +5,7 @@ import { PrismaService } from '../database/prisma.service';
 import { BuscaService } from '../busca/busca.service';
 import { BuscarEstabelecimentosDto } from './dto/buscar-estabelecimentos.dto';
 import { EstabelecimentosService } from './estabelecimentos.service';
+import { errors } from '@elastic/elasticsearch';
 
 describe('EstabelecimentosService', () => {
   const count = jest.fn<(args: unknown) => Promise<number>>(() =>
@@ -584,15 +585,71 @@ describe('EstabelecimentosService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('executa fallback no PostgreSQL com status 200 e ordenação por distância quando Elasticsearch falha (BE-28)', async () => {
-      buscarEstabelecimentos.mockRejectedValue(
-        new Error('Elasticsearch indisponível'),
-      );
+    const erroConexaoES = () =>
+      new errors.ConnectionError('connect ECONNREFUSED 127.0.0.1:9200', {
+        meta: {},
+      } as never);
 
+    it('executa fallback no PostgreSQL e preserva a ordem de proximidade do SQL, não a do findMany (BE-28)', async () => {
+      buscarEstabelecimentos.mockRejectedValue(erroConexaoES());
+
+      // O SQL já devolve ordenado por distância real: o 2 (0,3 km) antes do 1 (2,2 km).
+      queryRaw.mockResolvedValueOnce([{ total: 2 }]).mockResolvedValueOnce([
+        { id: 'estabelecimento-2', distancia: 0.3 },
+        { id: 'estabelecimento-1', distancia: 2.2 },
+      ]);
+
+      // O findMany devolve em ordem INVERTIDA: se a reordenação sumir, o teste fica vermelho.
+      findMany.mockResolvedValue([
+        estabelecimento,
+        { ...estabelecimento, id: 'estabelecimento-2', nome: 'Hospital B' },
+      ]);
+
+      const resultado = await service.search({
+        lat: -8.05,
+        lng: -34.88,
+      } as BuscarEstabelecimentosDto);
+
+      expect(resultado.paginacao.total).toBe(2);
+      expect(resultado.dados.map((d) => d.id)).toEqual([
+        'estabelecimento-2',
+        'estabelecimento-1',
+      ]);
+      expect(resultado.dados.map((d) => d.distanciaKm)).toEqual([0.3, 2.2]);
+    });
+
+    it('ordena o fallback pela expressão de distância, nunca pelo alias arredondado', async () => {
+      buscarEstabelecimentos.mockRejectedValue(erroConexaoES());
       queryRaw
         .mockResolvedValueOnce([{ total: 1 }])
         .mockResolvedValueOnce([{ id: 'estabelecimento-1', distancia: 2.2 }]);
+      findMany.mockResolvedValue([estabelecimento]);
 
+      await service.search({
+        lat: -8.05,
+        lng: -34.88,
+      } as BuscarEstabelecimentosDto);
+
+      const sqlLista = queryRaw.mock.calls[1][0].sql;
+      expect(sqlLista).not.toMatch(/ORDER BY\s+distancia/);
+      expect(sqlLista).toMatch(/ORDER BY\s+\(\s*6371/);
+      expect(sqlLista).toMatch(/"latitude" BETWEEN/);
+      expect(sqlLista).toMatch(/"longitude" BETWEEN/);
+    });
+
+    it('cai no fallback quando o índice ainda não existe (404 index_not_found, antes do es:init)', async () => {
+      buscarEstabelecimentos.mockRejectedValue(
+        new errors.ResponseError({
+          statusCode: 404,
+          body: { error: { type: 'index_not_found_exception' } },
+          headers: {},
+          meta: {} as never,
+          warnings: null,
+        }),
+      );
+      queryRaw
+        .mockResolvedValueOnce([{ total: 1 }])
+        .mockResolvedValueOnce([{ id: 'estabelecimento-1', distancia: 2.2 }]);
       findMany.mockResolvedValue([estabelecimento]);
 
       const resultado = await service.search({
@@ -600,10 +657,63 @@ describe('EstabelecimentosService', () => {
         lng: -34.88,
       } as BuscarEstabelecimentosDto);
 
-      expect(resultado.paginacao.total).toBe(1);
       expect(resultado.dados).toHaveLength(1);
-      expect(resultado.dados[0].id).toBe('estabelecimento-1');
-      expect(resultado.dados[0].distanciaKm).toBe(2.2);
+    });
+
+    it('NÃO cai no fallback quando o ES responde 400 (bug de query): relança o erro', async () => {
+      buscarEstabelecimentos.mockRejectedValue(
+        new errors.ResponseError({
+          statusCode: 400,
+          body: { error: { type: 'parsing_exception' } },
+          headers: {},
+          meta: {} as never,
+          warnings: null,
+        }),
+      );
+
+      await expect(
+        service.search({
+          lat: -8.05,
+          lng: -34.88,
+        } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(errors.ResponseError);
+      expect(queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('falha do PostgreSQL depois do ES responder NÃO dispara o fallback (erro de banco é relançado)', async () => {
+      buscarEstabelecimentos.mockResolvedValue({
+        itens: [
+          { estabelecimento: { id: 'estabelecimento-1' }, distanciaKm: 1 },
+        ],
+        total: 1,
+        pagina: 1,
+        totalPaginas: 1,
+      });
+      findMany.mockRejectedValue(
+        Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+          code: 'ECONNREFUSED',
+        }),
+      );
+
+      await expect(
+        service.search({
+          lat: -8.05,
+          lng: -34.88,
+        } as BuscarEstabelecimentosDto),
+      ).rejects.toThrow('ECONNREFUSED');
+      expect(queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('NÃO cai no fallback quando o erro é nosso (TypeError): relança', async () => {
+      buscarEstabelecimentos.mockRejectedValue(new TypeError('bug nosso'));
+
+      await expect(
+        service.search({
+          lat: -8.05,
+          lng: -34.88,
+        } as BuscarEstabelecimentosDto),
+      ).rejects.toBeInstanceOf(TypeError);
+      expect(queryRaw).not.toHaveBeenCalled();
     });
 
     it('combina múltiplos filtros (termo, tipo, especialidade, cidade, estado e raio) na busca geográfica (BE-11)', async () => {
