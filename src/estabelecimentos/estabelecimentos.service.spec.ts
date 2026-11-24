@@ -660,7 +660,7 @@ describe('EstabelecimentosService', () => {
       expect(resultado.dados).toHaveLength(1);
     });
 
-    it('NÃO cai no fallback quando o ES responde 4xx (bug de query): relança o erro', async () => {
+    it('NÃO cai no fallback quando o ES responde 400 (bug de query): relança o erro', async () => {
       buscarEstabelecimentos.mockRejectedValue(
         new errors.ResponseError({
           statusCode: 400,
