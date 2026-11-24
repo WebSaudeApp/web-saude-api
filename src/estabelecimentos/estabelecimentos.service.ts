@@ -212,7 +212,11 @@ export class EstabelecimentosService {
   private ultimoAvisoFallbackMs = 0;
   private fallbacksSemAviso = 0;
 
-  /** Um aviso por minuto, com a contagem do período: não inunda o log quando o ES fica fora. */
+  /**
+   * No máximo um aviso de fallback por minuto, com a contagem desde o aviso anterior.
+   * Não reduz o log como um todo: o BuscaService ainda registra um erro por busca que falha
+   * no ES. Isso fica para a BE-42 (#75).
+   */
   private avisarFallback(erro: unknown): void {
     this.fallbacksSemAviso += 1;
     const agora = Date.now();
@@ -221,7 +225,7 @@ export class EstabelecimentosService {
     }
     this.logger.warn(
       `Elasticsearch indisponível (${erro instanceof Error ? erro.message : String(erro)}): ` +
-        `${this.fallbacksSemAviso} busca(s) por localização atendida(s) pelo fallback no PostgreSQL no último minuto.`,
+        `${this.fallbacksSemAviso} busca(s) por localização atendida(s) pelo fallback no PostgreSQL desde o último aviso.`,
     );
     this.ultimoAvisoFallbackMs = agora;
     this.fallbacksSemAviso = 0;

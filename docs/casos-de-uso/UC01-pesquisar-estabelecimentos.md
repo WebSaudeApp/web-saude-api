@@ -12,7 +12,7 @@ O método `EstabelecimentosService.search()` aceita os filtros `termo`, `tipo`, 
 - **Cidade (RN02):** `cidade` é comparada pelo nome completo exato (insensível a acentos e maiúsculas) nos dois motores; buscar "São José" não casa com "São José do Egito". Com geolocalização informada, o filtro espacial é regido pelo raio (8a).
 - **Especialidade (RN06, A2):** aceita o ID ou o nome exato da especialidade (insensível a acentos e maiúsculas); buscar "Clínica" não casa com "Clínica Geral" ou "Clínica Médica".
 - **Tipo (RN05):** os tipos aceitos são `HOSPITAL` e `CLINICA`, gravados assim no banco. O valor recebido é normalizado para maiúsculas sem acento antes da comparação, então `clinica` ou `clínica` encontra `CLINICA`. Tipos inexistentes devolvem lista vazia sem erro (CA07).
-- **Geolocalização e Fallback (BE-09, BE-10, BE-28):** a busca aceita parâmetros de geolocalização `lat`, `lng` e `raioKm` (padrão 10 km, máximo 50 km). Quando fornecidos, a busca é executada via Elasticsearch com ordenação por distância geográfica e cálculo de `distanciaKm` (1 casa decimal). Caso o Elasticsearch esteja **indisponível** (conexão recusada, timeout, HTTP 5xx/429 ou índice ainda inexistente), há fallback automático e transparente para a busca geográfica no PostgreSQL (Haversine, ordenado pela distância real e só então arredondado). Erros 4xx do ES (bug de query) e erros internos **não** caem no fallback: são relançados e aparecem como erro.
+- **Geolocalização e Fallback (BE-09, BE-10, BE-28):** a busca aceita parâmetros de geolocalização `lat`, `lng` e `raioKm` (padrão 10 km, máximo 50 km). Quando fornecidos, a busca é executada via Elasticsearch com ordenação por distância geográfica e cálculo de `distanciaKm` (1 casa decimal). Caso o Elasticsearch esteja **indisponível** (conexão recusada, timeout, HTTP 5xx/429 ou índice ainda inexistente), há fallback automático e transparente para a busca geográfica no PostgreSQL (Haversine, ordenado pela distância real e só então arredondado). Erros 400 do ES (bug de query) e erros internos **não** caem no fallback: são relançados e aparecem como erro.
 - **Documento do índice (8d):** horários de funcionamento foram removidos do documento de indexação do Elasticsearch (YAGNI), já que a busca não filtra por horário e os dados completos vêm do PostgreSQL (RN11).
 - **Ordenação:** sem coordenadas, os resultados são ordenados alfabeticamente por nome (RN07). Com coordenadas, são ordenados por proximidade com desempate estável por `nome.keyword` e `id`.
 - **Paginação:** usa página 1 e limite 20 como padrões (RN08) e inclui a propriedade booleana `temMais` para simplificar a integração com infinite scroll no front-end (`temMais: pagina < totalPaginas`).
@@ -56,8 +56,8 @@ A listagem de avaliações por usuário (`GET /usuarios/{id}/reviews`) não faz 
 | Última página parcial: 23 estabelecimentos, `limite=10` e `pagina=3` trazem 3 itens e 3 páginas | RN08, A3, A4, CA06 |
 | Busca geográfica por proximidade via Elasticsearch com cálculo de `distanciaKm` e ordenação | BE-09, BE-10 |
 | Busca geográfica com filtros combinados (termo, tipo, especialidade, cidade/estado) | BE-11 |
-| Fallback para SQL só quando o ES está indisponível (conexão/timeout/5xx), preservando a ordem de proximidade com mais de um item | BE-28 |
-| Erro 4xx do ES e erro interno não caem no fallback (relançados) | BE-28 |
+| Fallback para SQL só quando o ES está indisponível (conexão/timeout/5xx/429 ou índice inexistente), preservando a ordem de proximidade com mais de um item | BE-28 |
+| Erro 400 do ES e erro interno não caem no fallback (relançados) | BE-28 |
 | Paginação para scroll infinito sem repetição de itens e com flag `temMais` | BE-13 |
 
 ### Testes de paridade E2E (`test/paridade-busca.e2e-spec.ts`)

@@ -632,7 +632,9 @@ describe('EstabelecimentosService', () => {
 
       const sqlLista = queryRaw.mock.calls[1][0].sql;
       expect(sqlLista).not.toMatch(/ORDER BY\s+distancia/);
+      expect(sqlLista).toMatch(/ORDER BY\s+\(\s*6371/);
       expect(sqlLista).toMatch(/"latitude" BETWEEN/);
+      expect(sqlLista).toMatch(/"longitude" BETWEEN/);
     });
 
     it('cai no fallback quando o índice ainda não existe (404 index_not_found, antes do es:init)', async () => {

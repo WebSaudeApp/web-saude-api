@@ -3,6 +3,7 @@
  * Usado no fallback do PostgreSQL antes do Haversine, para o índice (latitude, longitude)
  * poder ser usado. Folga conservadora: 1° de latitude >= 110,5 km e 1° de longitude
  * >= 110 km * cos(lat); o Haversine decide o limite exato.
+ * Assume coordenadas do Brasil: antimeridiano (lng perto de ±180) e polos não são tratados.
  */
 export interface CaixaDelimitadora {
   latMin: number;
