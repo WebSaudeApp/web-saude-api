@@ -418,7 +418,7 @@ web-saude-api/
 
 #### Retenção dos logs
 
-- **Teste (Render, plano gratuito):** o Render guarda os logs por um período curto no plano gratuito e não deixa configurar esse prazo (conferido no painel em 24/11/2026: os logs dos deploys de 01 e 02/11 já tinham expirado; ver [Render — Logs](https://render.com/docs/logging)).
+- **Teste (Render, plano gratuito):** **7 dias** no plano Hobby (gratuito), sem opção de configurar o prazo (fonte: [Render — Logs, "Retention period"](https://render.com/docs/logging), consultada em 25/11/2026). Confere com o painel: em 24/11/2026 os logs dos deploys de 01 e 02/11 já tinham expirado.
 - **Produção:** prazo de retenção a definir no checklist de deploy da BE-33 (#55).
 
 ---
