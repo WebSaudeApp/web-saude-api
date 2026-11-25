@@ -73,11 +73,14 @@ describe('AllExceptionsFilter (BE-31 #53)', () => {
     const mockRequest = {
       method: 'GET',
       path: '/estabelecimentos',
-      originalUrl: '/estabelecimentos?lat=-8.05389&lng=-34.88111',
-      url: '/estabelecimentos?lat=-8.05389&lng=-34.88111',
+      originalUrl:
+        '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=especialidadeunica&termo=termounico',
+      url: '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=especialidadeunica&termo=termounico',
       query: {
         lat: '-8.05389',
         lng: '-34.88111',
+        especialidade: 'especialidadeunica',
+        termo: 'termounico',
       },
     };
 
@@ -101,8 +104,11 @@ describe('AllExceptionsFilter (BE-31 #53)', () => {
     const chamadas = errorSpy.mock.calls as unknown as Array<[string]>;
     const logMsg = chamadas[0][0];
 
-    expect(logMsg).toBe('GET /estabelecimentos [lat,lng] 500');
-    expect(logMsg).not.toContain('-8.05389');
-    expect(logMsg).not.toContain('-34.88111');
+    expect(logMsg).toBe(
+      'GET /estabelecimentos [especialidade,lat,lng,termo] 500',
+    );
+    for (const valor of Object.values(mockRequest.query)) {
+      expect(logMsg).not.toContain(valor);
+    }
   });
 });

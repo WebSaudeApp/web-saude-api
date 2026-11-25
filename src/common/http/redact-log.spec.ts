@@ -53,6 +53,12 @@ describe('redact-log (BE-31 #53)', () => {
       expect(log).not.toContain('admin');
     });
 
+    it('nome com vírgula ou espaço vira marcador, com contagem exata', () => {
+      expect(
+        sanitizarRotaLog(requisicao('/estabelecimentos', 'a%2Cb=1&c%20d=1')),
+      ).toBe('/estabelecimentos [?x2]');
+    });
+
     it('limita a 20 nomes válidos e conta os inválidos (nome longo demais)', () => {
       const validos = Array.from({ length: 30 }, (_, i) => `p${i}=1`);
       const longo = `${'x'.repeat(41)}=1`;
