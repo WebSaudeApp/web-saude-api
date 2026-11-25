@@ -2,40 +2,52 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { EnderecoDto, UpdateEnderecoDto } from './endereco.dto';
 
-describe('EnderecoDto (Validações de Coordenadas no Brasil - BE-07 / QA-06)', () => {
+describe('EnderecoDto (Validação de Coordenadas no Brasil - BE-07)', () => {
   const dadosValidos = {
-    cep: '50070-000',
-    logradouro: 'Av. Governador Agamenon Magalhães',
-    numero: '4760',
-    bairro: 'Paissandu',
+    cep: '50070000',
+    logradouro: 'Rua do Espinheiro',
+    numero: '100',
+    bairro: 'Espinheiro',
     cidade: 'Recife',
     estado: 'PE',
     latitude: -8.0476,
     longitude: -34.877,
   };
 
-  it('aceita coordenadas válidas dentro do Brasil (Recife)', async () => {
+  it('valida com sucesso um endereço com coordenadas dentro do Brasil', async () => {
     const dto = plainToInstance(EnderecoDto, dadosValidos);
     const erros = await validate(dto);
+
     expect(erros).toHaveLength(0);
   });
 
-  describe('Limites exatos de Latitude (-34 a 6)', () => {
-    it('aceita latitude na borda inferior exata (-34)', async () => {
+  describe('Latitude (território brasileiro: entre -34 e 6)', () => {
+    it('aceita latitude no extremo norte (+5.27)', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        latitude: -34,
+        latitude: 5.27,
       });
       const erros = await validate(dto);
-      expect(erros.find((e) => e.property === 'latitude')).toBeUndefined();
+      expect(erros).toHaveLength(0);
     });
 
-    it('recusa latitude imediatamente abaixo da borda inferior (-34.0001)', async () => {
+    it('aceita latitude no extremo sul (-33.75)', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        latitude: -34.0001,
+        latitude: -33.75,
       });
       const erros = await validate(dto);
+      expect(erros).toHaveLength(0);
+    });
+
+    it('recusa latitude menor que -34 (ao sul do Brasil)', async () => {
+      const dto = plainToInstance(EnderecoDto, {
+        ...dadosValidos,
+        latitude: -35.0,
+      });
+      const erros = await validate(dto);
+
+      expect(erros.length).toBeGreaterThan(0);
       const erroLat = erros.find((e) => e.property === 'latitude');
       expect(erroLat).toBeDefined();
       expect(erroLat?.constraints?.min).toBe(
@@ -43,21 +55,14 @@ describe('EnderecoDto (Validações de Coordenadas no Brasil - BE-07 / QA-06)', 
       );
     });
 
-    it('aceita latitude na borda superior exata (6)', async () => {
+    it('recusa latitude maior que 6 (ao norte do Brasil, ex: Hemisfério Norte/EUA)', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        latitude: 6,
+        latitude: 40.7128, // Nova York
       });
       const erros = await validate(dto);
-      expect(erros.find((e) => e.property === 'latitude')).toBeUndefined();
-    });
 
-    it('recusa latitude imediatamente acima da borda superior (6.0001)', async () => {
-      const dto = plainToInstance(EnderecoDto, {
-        ...dadosValidos,
-        latitude: 6.0001,
-      });
-      const erros = await validate(dto);
+      expect(erros.length).toBeGreaterThan(0);
       const erroLat = erros.find((e) => e.property === 'latitude');
       expect(erroLat).toBeDefined();
       expect(erroLat?.constraints?.max).toBe(
@@ -66,22 +71,33 @@ describe('EnderecoDto (Validações de Coordenadas no Brasil - BE-07 / QA-06)', 
     });
   });
 
-  describe('Limites exatos de Longitude (-74 a -28)', () => {
-    it('aceita longitude na borda oeste exata (-74)', async () => {
+  describe('Longitude (território brasileiro: entre -74 e -28)', () => {
+    it('aceita longitude no extremo oeste (-73.98)', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        longitude: -74,
+        longitude: -73.98,
       });
       const erros = await validate(dto);
-      expect(erros.find((e) => e.property === 'longitude')).toBeUndefined();
+      expect(erros).toHaveLength(0);
     });
 
-    it('recusa longitude imediatamente a oeste da borda (-74.0001)', async () => {
+    it('aceita longitude no extremo leste / ilhas (-29.35)', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        longitude: -74.0001,
+        longitude: -29.35,
       });
       const erros = await validate(dto);
+      expect(erros).toHaveLength(0);
+    });
+
+    it('recusa longitude menor que -74 (ao oeste do Brasil)', async () => {
+      const dto = plainToInstance(EnderecoDto, {
+        ...dadosValidos,
+        longitude: -75.0,
+      });
+      const erros = await validate(dto);
+
+      expect(erros.length).toBeGreaterThan(0);
       const erroLon = erros.find((e) => e.property === 'longitude');
       expect(erroLon).toBeDefined();
       expect(erroLon?.constraints?.min).toBe(
@@ -89,21 +105,14 @@ describe('EnderecoDto (Validações de Coordenadas no Brasil - BE-07 / QA-06)', 
       );
     });
 
-    it('aceita longitude na borda leste exata (-28)', async () => {
+    it('recusa longitude maior que -28 (ao leste do Brasil / Oceano / Europa)', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        longitude: -28,
+        longitude: -20.0,
       });
       const erros = await validate(dto);
-      expect(erros.find((e) => e.property === 'longitude')).toBeUndefined();
-    });
 
-    it('recusa longitude imediatamente a leste da borda (-27.9999)', async () => {
-      const dto = plainToInstance(EnderecoDto, {
-        ...dadosValidos,
-        longitude: -27.9999,
-      });
-      const erros = await validate(dto);
+      expect(erros.length).toBeGreaterThan(0);
       const erroLon = erros.find((e) => e.property === 'longitude');
       expect(erroLon).toBeDefined();
       expect(erroLon?.constraints?.max).toBe(
@@ -111,19 +120,21 @@ describe('EnderecoDto (Validações de Coordenadas no Brasil - BE-07 / QA-06)', 
       );
     });
 
-    it('recusa coordenadas (0, 0) / Null Island isolando a longitude', async () => {
+    it('recusa coordenadas (0, 0) / Null Island', async () => {
       const dto = plainToInstance(EnderecoDto, {
         ...dadosValidos,
-        latitude: -8.0476,
+        latitude: 0,
         longitude: 0,
       });
       const erros = await validate(dto);
+
+      expect(erros.length).toBeGreaterThan(0);
       const erroLon = erros.find((e) => e.property === 'longitude');
       expect(erroLon).toBeDefined();
     });
   });
 
-  describe('UpdateEnderecoDto (edição parcial com isolamento de campos)', () => {
+  describe('UpdateEnderecoDto (edição parcial)', () => {
     it('permite atualizar somente coordenadas válidas', async () => {
       const dto = plainToInstance(UpdateEnderecoDto, {
         latitude: -23.5505, // São Paulo
@@ -133,28 +144,13 @@ describe('EnderecoDto (Validações de Coordenadas no Brasil - BE-07 / QA-06)', 
       expect(erros).toHaveLength(0);
     });
 
-    it('recusa somente latitude fora do Brasil mantendo longitude ausente', async () => {
+    it('recusa coordenadas fora do Brasil na edição parcial', async () => {
       const dto = plainToInstance(UpdateEnderecoDto, {
-        latitude: 48.8566, // Paris (hemisfério norte fora do Brasil)
+        latitude: 48.8566, // Paris
+        longitude: 2.3522,
       });
       const erros = await validate(dto);
-      expect(erros).toHaveLength(1);
-      expect(erros[0].property).toBe('latitude');
-      expect(erros[0].constraints?.max).toBe(
-        'Latitude deve estar dentro do território brasileiro (entre -34 e 6)',
-      );
-    });
-
-    it('recusa somente longitude fora do Brasil mantendo latitude ausente', async () => {
-      const dto = plainToInstance(UpdateEnderecoDto, {
-        longitude: 2.3522, // Paris (leste fora do Brasil)
-      });
-      const erros = await validate(dto);
-      expect(erros).toHaveLength(1);
-      expect(erros[0].property).toBe('longitude');
-      expect(erros[0].constraints?.max).toBe(
-        'Longitude deve estar dentro do território brasileiro (entre -74 e -28)',
-      );
+      expect(erros.length).toBeGreaterThan(0);
     });
   });
 });

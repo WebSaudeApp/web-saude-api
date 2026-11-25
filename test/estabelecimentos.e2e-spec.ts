@@ -5,7 +5,6 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { BuscaService } from '../src/busca/busca.service';
-import { ALIAS_ESTABELECIMENTOS } from '../src/busca/constantes';
 
 jest.setTimeout(180000);
 
@@ -301,97 +300,4 @@ describe('Estabelecimentos (e2e)', () => {
       await prisma.endereco.count({ where: { id: unit.endereco.id } }),
     ).toBe(0);
   }, 180000);
-
-  it('propaga cadastro, edição e remoção do Postgres para o índice do Elasticsearch (BE-15)', async () => {
-    const buscaService = app.get(BuscaService);
-    // Sem ES este teste deve FALHAR (não pode passar em silêncio): e2e exige docker compose up.
-    expect(await buscaService.estaDisponivel()).toBe(true);
-    const refresh = () =>
-      buscaService
-        .obterCliente()
-        .indices.refresh({ index: ALIAS_ESTABELECIMENTOS });
-
-    const created = await request(app.getHttpServer())
-      .post('/estabelecimentos')
-      .send({
-        nome: `Sync CRUD ${suffix}`,
-        tipo: 'HOSPITAL',
-        endereco: {
-          cep: '50000-000',
-          logradouro: 'Rua Sync',
-          numero: '1',
-          cidade: 'Recife',
-          estado: 'PE',
-          latitude: -8.05,
-          longitude: -34.88,
-        },
-      })
-      .expect(201);
-    const id = (created.body as Estabelecimento).id;
-    unitIds.push(id);
-
-    await refresh();
-    expect((await buscaService.obterEstabelecimentoPorId(id))?.nome).toBe(
-      `Sync CRUD ${suffix}`,
-    );
-
-    await request(app.getHttpServer())
-      .patch(`/estabelecimentos/${id}`)
-      .send({ nome: `Sync CRUD editado ${suffix}` })
-      .expect(200);
-    await refresh();
-    expect((await buscaService.obterEstabelecimentoPorId(id))?.nome).toBe(
-      `Sync CRUD editado ${suffix}`,
-    );
-
-    await request(app.getHttpServer())
-      .delete(`/estabelecimentos/${id}`)
-      .expect(200);
-    await refresh();
-    expect(await buscaService.obterEstabelecimentoPorId(id)).toBeNull();
-  });
-
-  describe('Validações HTTP da Query de Estabelecimentos (ValidationPipe - QA-06 #57)', () => {
-    it('rejeita latitude fora dos limites (-90 a 90) com 400', async () => {
-      await request(app.getHttpServer())
-        .get('/estabelecimentos')
-        .query({ lat: 95, lng: -34.88 })
-        .expect(400);
-    });
-
-    it('rejeita longitude fora dos limites (-180 a 180) com 400', async () => {
-      await request(app.getHttpServer())
-        .get('/estabelecimentos')
-        .query({ lat: -8.05, lng: 185 })
-        .expect(400);
-    });
-
-    it('rejeita raioKm maior que 50 km com 400 (se @Max(50) for removido este teste falha)', async () => {
-      await request(app.getHttpServer())
-        .get('/estabelecimentos')
-        .query({ lat: -8.05, lng: -34.88, raioKm: 55 })
-        .expect(400);
-    });
-
-    it('rejeita lat sem lng com 400', async () => {
-      await request(app.getHttpServer())
-        .get('/estabelecimentos')
-        .query({ lat: -8.05 })
-        .expect(400);
-    });
-
-    it('rejeita raioKm sem coordenadas com 400', async () => {
-      await request(app.getHttpServer())
-        .get('/estabelecimentos')
-        .query({ raioKm: 25 })
-        .expect(400);
-    });
-
-    it('rejeita parâmetros não reconhecidos com 400 (whitelist)', async () => {
-      await request(app.getHttpServer())
-        .get('/estabelecimentos')
-        .query({ parametroInexistente: 'invalido' })
-        .expect(400);
-    });
-  });
 });

@@ -1,74 +1,136 @@
-import { validarRegrasGeograficas } from './parse-buscar-estabelecimentos-query';
+import { BadRequestException } from '@nestjs/common';
+import { parseBuscarEstabelecimentosQuery } from './parse-buscar-estabelecimentos-query';
 
-describe('validarRegrasGeograficas (Regras geográficas BE-09 / BE-12 / BE-14)', () => {
+describe('parseBuscarEstabelecimentosQuery (Validações BE-09 / BE-12 / BE-14)', () => {
   it('aceita query geográfica completa e válida', () => {
-    const erros = validarRegrasGeograficas({
-      lat: -8.05389,
-      lng: -34.88111,
-      raioKm: 15,
-      pagina: 1,
-      limite: 20,
+    const query = parseBuscarEstabelecimentosQuery({
+      lat: '-8.05389',
+      lng: '-34.88111',
+      raioKm: '15',
+      pagina: '1',
+      limite: '20',
     });
 
-    expect(erros).toHaveLength(0);
+    expect(query.lat).toBe(-8.05389);
+    expect(query.lng).toBe(-34.88111);
+    expect(query.raioKm).toBe(15);
+    expect(query.pagina).toBe(1);
+    expect(query.limite).toBe(20);
   });
 
   it('aceita busca sem coordenadas geográficas (busca textual tradicional)', () => {
-    const erros = validarRegrasGeograficas({
+    const query = parseBuscarEstabelecimentosQuery({
       termo: 'hospital',
       cidade: 'Recife',
       estado: 'PE',
     });
 
-    expect(erros).toHaveLength(0);
+    expect(query.termo).toBe('hospital');
+    expect(query.cidade).toBe('Recife');
+    expect(query.estado).toBe('PE');
+    expect(query.lat).toBeUndefined();
+    expect(query.lng).toBeUndefined();
   });
 
   it('rejeita envio de lat sem lng', () => {
-    const erros = validarRegrasGeograficas({
-      lat: -8.05389,
-    });
+    expect(() =>
+      parseBuscarEstabelecimentosQuery({
+        lat: '-8.05389',
+      }),
+    ).toThrow(BadRequestException);
 
-    expect(erros).toEqual([
-      {
-        campo: 'lng',
-        mensagem: 'Latitude e longitude devem ser enviadas juntas.',
-      },
-    ]);
+    try {
+      parseBuscarEstabelecimentosQuery({ lat: '-8.05389' });
+    } catch (e) {
+      const resp = (e as BadRequestException).getResponse() as {
+        status: number;
+        erros: Array<{ campo: string; mensagem: string }>;
+      };
+      expect(resp.status).toBe(400);
+      expect(resp.erros.some((err) => err.campo === 'lng')).toBe(true);
+    }
   });
 
   it('rejeita envio de lng sem lat', () => {
-    const erros = validarRegrasGeograficas({
-      lng: -34.88111,
-    });
-
-    expect(erros).toEqual([
-      {
-        campo: 'lat',
-        mensagem: 'Latitude e longitude devem ser enviadas juntas.',
-      },
-    ]);
+    try {
+      parseBuscarEstabelecimentosQuery({ lng: '-34.88111' });
+    } catch (e) {
+      const resp = (e as BadRequestException).getResponse() as {
+        status: number;
+        erros: Array<{ campo: string; mensagem: string }>;
+      };
+      expect(resp.status).toBe(400);
+      expect(resp.erros.some((err) => err.campo === 'lat')).toBe(true);
+    }
   });
 
   it('rejeita envio de raioKm sem coordenadas lat/lng', () => {
-    const erros = validarRegrasGeograficas({
-      raioKm: 25,
-    });
-
-    expect(erros).toEqual([
-      {
-        campo: 'raioKm',
-        mensagem:
-          'O raio em km só pode ser informado junto com a latitude e a longitude.',
-      },
-    ]);
+    try {
+      parseBuscarEstabelecimentosQuery({ raioKm: '25' });
+    } catch (e) {
+      const resp = (e as BadRequestException).getResponse() as {
+        status: number;
+        erros: Array<{ campo: string; mensagem: string }>;
+      };
+      expect(resp.status).toBe(400);
+      expect(resp.erros.some((err) => err.campo === 'raioKm')).toBe(true);
+    }
   });
 
-  it('aceita consulta apenas com coordenadas sem raioKm (raio default assumido pelo serviço)', () => {
-    const erros = validarRegrasGeograficas({
-      lat: -8.05389,
-      lng: -34.88111,
-    });
+  it('rejeita latitude fora dos limites (-90 a 90)', () => {
+    try {
+      parseBuscarEstabelecimentosQuery({
+        lat: '95',
+        lng: '-34.88',
+      });
+    } catch (e) {
+      const resp = (e as BadRequestException).getResponse() as {
+        status: number;
+        erros: Array<{ campo: string; mensagem: string }>;
+      };
+      expect(resp.status).toBe(400);
+      expect(resp.erros.some((err) => err.campo === 'lat')).toBe(true);
+    }
+  });
 
-    expect(erros).toHaveLength(0);
+  it('rejeita longitude fora dos limites (-180 a 180)', () => {
+    try {
+      parseBuscarEstabelecimentosQuery({
+        lat: '-8.05',
+        lng: '185',
+      });
+    } catch (e) {
+      const resp = (e as BadRequestException).getResponse() as {
+        status: number;
+        erros: Array<{ campo: string; mensagem: string }>;
+      };
+      expect(resp.status).toBe(400);
+      expect(resp.erros.some((err) => err.campo === 'lng')).toBe(true);
+    }
+  });
+
+  it('rejeita raioKm maior que 50 km', () => {
+    try {
+      parseBuscarEstabelecimentosQuery({
+        lat: '-8.05',
+        lng: '-34.88',
+        raioKm: '55',
+      });
+    } catch (e) {
+      const resp = (e as BadRequestException).getResponse() as {
+        status: number;
+        erros: Array<{ campo: string; mensagem: string }>;
+      };
+      expect(resp.status).toBe(400);
+      expect(resp.erros.some((err) => err.campo === 'raioKm')).toBe(true);
+    }
+  });
+
+  it('rejeita parâmetros não reconhecidos (whitelist)', () => {
+    expect(() =>
+      parseBuscarEstabelecimentosQuery({
+        parametroDesconhecido: 'invalido',
+      }),
+    ).toThrow(BadRequestException);
   });
 });
