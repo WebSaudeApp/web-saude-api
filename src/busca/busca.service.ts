@@ -372,18 +372,16 @@ export class BuscaService implements OnModuleInit {
   }
 }
 
-// Só identificadores fixos (ex.: `index_not_found_exception`, `ECONNREFUSED`) entram no log.
+// Só identificadores fixos (ex.: `ResponseError`, `index_not_found_exception`) entram no log.
 const CODIGO_SEGURO = /^[A-Za-z_]{1,60}$/;
 
 /**
  * Descreve uma falha do ES sem a mensagem, que pode repetir trechos da consulta (termo,
- * coordenadas) (BE-31 #53): tipo do erro, status HTTP, tipo do erro do ES e código de rede.
+ * coordenadas) (BE-31 #53): classe do erro, status HTTP e tipo do erro devolvido pelo ES.
  */
 function descreverErroSemDados(erro: unknown): string {
   const e = (erro ?? {}) as {
-    name?: unknown;
     statusCode?: unknown;
-    code?: unknown;
     meta?: { body?: { error?: { type?: unknown } } };
   };
   const partes: string[] = [
@@ -391,9 +389,8 @@ function descreverErroSemDados(erro: unknown): string {
   ];
   if (typeof e.statusCode === 'number') partes.push(`HTTP ${e.statusCode}`);
   const tipoEs = e.meta?.body?.error?.type;
-  if (typeof tipoEs === 'string' && CODIGO_SEGURO.test(tipoEs))
+  if (typeof tipoEs === 'string' && CODIGO_SEGURO.test(tipoEs)) {
     partes.push(tipoEs);
-  if (typeof e.code === 'string' && CODIGO_SEGURO.test(e.code))
-    partes.push(e.code);
+  }
   return partes.join(' ');
 }

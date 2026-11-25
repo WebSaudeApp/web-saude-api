@@ -1,9 +1,8 @@
 import type { Request } from 'express';
 
-// Nome de parâmetro válido = identificador (letra ou _, depois letras, dígitos ou _; até 40).
-// Não aceita dígitos, ponto ou hífen no início, para um "nome" como `-8.05389` (coordenada
-// enviada sem `=`) não entrar no log como se fosse o nome do parâmetro.
-// Só identificador. Nome com colchete ou hífen (ex.: ids[]) aparece como ?x1 até ajustarem esta regex.
+// Só identificador (letra ou _, depois letras, dígitos ou _; até 40): um "nome" como `-8.05389`
+// (coordenada enviada sem `=`) não entra no log. Nome com colchete ou hífen (ex.: ids[]) aparece
+// como ?x1 até ajustarem esta regex.
 const NOME_PARAMETRO_SEGURO = /^[A-Za-z_][A-Za-z0-9_]{0,39}$/;
 const MAX_PARAMETROS_LOGADOS = 20;
 

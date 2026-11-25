@@ -1,4 +1,5 @@
 import { BadRequestException, Logger } from '@nestjs/common';
+import { errors } from '@elastic/elasticsearch';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
 import { BuscaService } from './busca.service';
 import {
@@ -319,24 +320,28 @@ describe('BuscaService', () => {
   });
 
   describe('buscarEstabelecimentos', () => {
-    it('quando o ES falha, loga só o tipo e o status do erro, sem os valores da consulta (BE-31 #53)', async () => {
-      const erroEs = Object.assign(
-        new Error(
-          'search_phase_execution_exception: [termo: ClinicaSigilosaQ7] [lat: -8.05389, lon: -34.88111] [Cardiologia]',
-        ),
-        {
-          name: 'ResponseError',
-          statusCode: 503,
-          meta: {
-            body: {
-              error: {
-                type: 'search_phase_execution_exception',
-                reason: 'termo ClinicaSigilosaQ7 em -8.05389',
+    it('quando o ES responde erro, loga classe, status e tipo do erro, sem os valores da consulta (BE-31 #53)', async () => {
+      // Erro real do cliente: a mensagem dele repete os `reason` do ES, que podem trazer a consulta.
+      const erroEs = new errors.ResponseError({
+        body: {
+          error: {
+            type: 'search_phase_execution_exception',
+            reason: 'all shards failed',
+            root_cause: [
+              {
+                type: 'query_shard_exception',
+                reason:
+                  'failed to create query: termo ClinicaSigilosaQ7 em -8.05389,-34.88111 Cardiologia',
               },
-            },
+            ],
           },
         },
-      );
+        statusCode: 400,
+        headers: {},
+        warnings: null,
+        meta: {} as never,
+      });
+      expect(erroEs.message).toContain('ClinicaSigilosaQ7');
       const service = new BuscaService({
         search: jest.fn().mockRejectedValue(erroEs),
       } as unknown as ElasticsearchService);
@@ -355,21 +360,21 @@ describe('BuscaService', () => {
       expect(errorSpy).toHaveBeenCalledTimes(1);
       const [mensagem] = errorSpy.mock.calls[0] as [string];
       expect(mensagem).toBe(
-        'Erro ao buscar estabelecimentos no Elasticsearch: ResponseError HTTP 503 search_phase_execution_exception',
+        'Erro ao buscar estabelecimentos no Elasticsearch: ResponseError HTTP 400 search_phase_execution_exception',
       );
-      expect(mensagem).not.toContain('ClinicaSigilosaQ7');
-      expect(mensagem).not.toContain('8.05389');
-      expect(mensagem).not.toContain('34.88111');
-      expect(mensagem).not.toContain('Cardiologia');
+      for (const valor of [
+        'ClinicaSigilosaQ7',
+        '8.05389',
+        '34.88111',
+        'Cardiologia',
+      ]) {
+        expect(mensagem).not.toContain(valor);
+      }
     });
 
-    it('quando o ES está fora da rede, loga o código do erro de rede (BE-31 #53)', async () => {
-      const erroRede = Object.assign(
-        new Error('connect ECONNREFUSED 10.0.0.1:9200'),
-        {
-          name: 'ConnectionError',
-          code: 'ECONNREFUSED',
-        },
+    it('quando o ES está fora do ar, loga só a classe do erro de conexão (BE-31 #53)', async () => {
+      const erroRede = new errors.ConnectionError(
+        'connect ECONNREFUSED 10.0.0.1:9200',
       );
       const service = new BuscaService({
         search: jest.fn().mockRejectedValue(erroRede),
@@ -382,8 +387,8 @@ describe('BuscaService', () => {
         service.buscarEstabelecimentos({ termo: 'ClinicaSigilosaQ7' }),
       ).rejects.toBe(erroRede);
 
-      expect(errorSpy.mock.calls[0]).toEqual([
-        'Erro ao buscar estabelecimentos no Elasticsearch: ConnectionError ECONNREFUSED',
+      expect(errorSpy.mock.calls).toEqual([
+        ['Erro ao buscar estabelecimentos no Elasticsearch: ConnectionError'],
       ]);
     });
 
