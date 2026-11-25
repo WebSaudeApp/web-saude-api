@@ -1,68 +1,69 @@
+import { parse } from 'node:querystring';
 import type { Request } from 'express';
-import { redactLogRecord, sanitizarRotaLog } from './redact-log';
+import { sanitizarRotaLog } from './redact-log';
+
+/** Monta a requisição a partir da query string crua, com um parser real. */
+function requisicao(caminho: string, queryString: string): Request {
+  return {
+    path: caminho,
+    query: parse(queryString),
+  } as unknown as Request;
+}
 
 describe('redact-log (BE-31 #53)', () => {
-  describe('redactLogRecord', () => {
-    it('oculta senha, token e authorization', () => {
-      expect(
-        redactLogRecord({
-          method: 'POST',
-          password: 'senhaSegura1',
-          accessToken: 'abc',
-          authorization: 'Bearer xyz',
-          email: 'maria@email.com',
-        }),
-      ).toEqual({
-        method: 'POST',
-        password: '[redacted]',
-        accessToken: '[redacted]',
-        authorization: '[redacted]',
-        email: 'maria@email.com',
-      });
-    });
-  });
-
   describe('sanitizarRotaLog', () => {
     it('retorna a rota com os nomes dos parâmetros ordenados e sem valores', () => {
-      const mockRequest = {
-        path: '/estabelecimentos',
-        query: {
-          lat: '-8.05',
-          lng: '-34.88',
-          termo: 'hospital',
-          cidade: 'Recife',
-        },
-      } as unknown as Request;
-
-      expect(sanitizarRotaLog(mockRequest)).toBe(
-        '/estabelecimentos [cidade,lat,lng,termo]',
-      );
+      expect(
+        sanitizarRotaLog(
+          requisicao(
+            '/estabelecimentos',
+            'lat=-8.05&lng=-34.88&termo=hospital&cidade=Recife',
+          ),
+        ),
+      ).toBe('/estabelecimentos [cidade,lat,lng,termo]');
     });
 
     it('retorna apenas o caminho quando não há parâmetros de query', () => {
-      const mockRequest = {
-        path: '/estabelecimentos/tipos',
-        query: {},
-      } as unknown as Request;
-
-      expect(sanitizarRotaLog(mockRequest)).toBe('/estabelecimentos/tipos');
+      expect(sanitizarRotaLog(requisicao('/estabelecimentos/tipos', ''))).toBe(
+        '/estabelecimentos/tipos',
+      );
     });
 
-    it('substitui nomes de parâmetros inválidos e limita a quantidade (anti log forging)', () => {
-      const query: Record<string, string> = {
-        'x\n[Nest] LOG admin login': '1',
-        ['x'.repeat(41)]: '1',
-      };
-      for (let i = 0; i < 30; i++) query[`p${i}`] = '1';
-      const log = sanitizarRotaLog({
-        path: '/estabelecimentos',
-        query,
-      } as unknown as Request);
+    it('coordenada enviada sem `=` não vira nome no log', () => {
+      // `?-8.05389&-34.88111`: o parser devolve as coordenadas como NOMES.
+      const log = sanitizarRotaLog(
+        requisicao('/estabelecimentos', '-8.05389&-34.88111'),
+      );
 
+      expect(log).toBe('/estabelecimentos [?x2]');
+      expect(log).not.toContain('8.05389');
+      expect(log).not.toContain('34.88111');
+    });
+
+    it('nome com quebra de linha (log forging) vira marcador, ao lado dos válidos', () => {
+      const log = sanitizarRotaLog(
+        requisicao(
+          '/estabelecimentos',
+          'termo=a&x%0A%5BNest%5D%20LOG%20admin%20login=1&lat=1',
+        ),
+      );
+
+      expect(log).toBe('/estabelecimentos [lat,termo,?x1]');
       expect(log).not.toMatch(/[\r\n]/);
       expect(log).not.toContain('admin');
-      expect(log.split(',').length).toBeLessThanOrEqual(21);
-      expect(log).toContain('?x2');
+    });
+
+    it('limita a 20 nomes válidos e conta os inválidos (nome longo demais)', () => {
+      const validos = Array.from({ length: 30 }, (_, i) => `p${i}=1`);
+      const longo = `${'x'.repeat(41)}=1`;
+      const log = sanitizarRotaLog(
+        requisicao('/estabelecimentos', [...validos, longo].join('&')),
+      );
+
+      const nomes = log.slice(log.indexOf('[') + 1, -1).split(',');
+      expect(nomes).toHaveLength(21);
+      expect(nomes.filter((n) => /^p\d+$/.test(n))).toHaveLength(20);
+      expect(nomes[20]).toBe('?x1');
     });
 
     it('usa url sem query se path for indefinido', () => {

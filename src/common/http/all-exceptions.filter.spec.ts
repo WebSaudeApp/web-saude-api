@@ -24,13 +24,13 @@ describe('AllExceptionsFilter (BE-31 #53)', () => {
       method: 'GET',
       path: '/estabelecimentos',
       originalUrl:
-        '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=x',
-      url: '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=x',
+        '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=ClinicaSigilosaQ7',
+      url: '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=ClinicaSigilosaQ7',
       query: {
         lat: '-8.05389',
         lng: '-34.88111',
         especialidade: 'Cardiologia',
-        termo: 'x',
+        termo: 'ClinicaSigilosaQ7',
       },
     };
 
@@ -58,7 +58,7 @@ describe('AllExceptionsFilter (BE-31 #53)', () => {
     const logMsg = chamadas[0][0];
 
     // Deve conter rota, nomes dos parâmetros e status
-    expect(logMsg).toContain(
+    expect(logMsg).toBe(
       'GET /estabelecimentos [especialidade,lat,lng,termo] 503',
     );
 
@@ -66,7 +66,7 @@ describe('AllExceptionsFilter (BE-31 #53)', () => {
     expect(logMsg).not.toContain('-8.05389');
     expect(logMsg).not.toContain('-34.88111');
     expect(logMsg).not.toContain('Cardiologia');
-    expect(logMsg).not.toContain('termo=x');
+    expect(logMsg).not.toContain('ClinicaSigilosaQ7');
   });
 
   it('loga erro 500 genérico sem vazar valores de query', () => {
@@ -101,7 +101,7 @@ describe('AllExceptionsFilter (BE-31 #53)', () => {
     const chamadas = errorSpy.mock.calls as unknown as Array<[string]>;
     const logMsg = chamadas[0][0];
 
-    expect(logMsg).toContain('GET /estabelecimentos [lat,lng] 500');
+    expect(logMsg).toBe('GET /estabelecimentos [lat,lng] 500');
     expect(logMsg).not.toContain('-8.05389');
     expect(logMsg).not.toContain('-34.88111');
   });

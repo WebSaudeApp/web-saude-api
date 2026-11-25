@@ -41,44 +41,15 @@ export class BuscaService implements OnModuleInit {
     }
   }
 
-  /**
-   * Ping no ES. Com `timeoutMs`, a chamada tem prazo próprio e não repete (o health check
-   * da hospedagem não pode esperar o timeout padrão de 30 s com retentativas).
-   */
-  async estaDisponivel(timeoutMs?: number): Promise<boolean> {
+  async estaDisponivel(): Promise<boolean> {
     try {
-      const resposta = await this.elasticsearchService.ping(
-        {},
-        timeoutMs ? { requestTimeout: timeoutMs, maxRetries: 0 } : undefined,
-      );
+      const resposta = await this.elasticsearchService.ping();
       return !!resposta;
     } catch (erro) {
       this.logger.warn(
         `Falha na checagem de saúde do Elasticsearch: ${String(erro)}`,
       );
       return false;
-    }
-  }
-
-  /**
-   * Situação do alias de busca: 'disponivel', 'ausente' (404: es:init não rodou) ou
-   * 'desconhecido' (timeout, 403 de chave restrita sem permissão de metadados, etc.).
-   * Só 'ausente' indica de fato que a busca por localização está indo para o fallback.
-   */
-  async situacaoIndice(
-    timeoutMs?: number,
-  ): Promise<'disponivel' | 'ausente' | 'desconhecido'> {
-    try {
-      const existe = await this.elasticsearchService.indices.exists(
-        { index: ALIAS_ESTABELECIMENTOS },
-        timeoutMs ? { requestTimeout: timeoutMs, maxRetries: 0 } : undefined,
-      );
-      return existe ? 'disponivel' : 'ausente';
-    } catch (erro) {
-      this.logger.warn(
-        `Não foi possível verificar o índice de busca: ${erro instanceof Error ? erro.message : String(erro)}`,
-      );
-      return 'desconhecido';
     }
   }
 
@@ -393,10 +364,14 @@ export class BuscaService implements OnModuleInit {
         totalPaginas: Math.ceil(totalHits / size),
       };
     } catch (erro) {
-      const mensagemErro =
-        erro instanceof Error ? erro.message : 'Falha na consulta';
+      // A mensagem do ES pode repetir trechos da consulta (termo, coordenadas): o log
+      // leva só o tipo do erro e o status HTTP, nunca a mensagem (BE-31 #53).
+      const tipo = erro instanceof Error ? erro.name : 'Erro';
+      const status = (erro as { statusCode?: unknown } | null)?.statusCode;
       this.logger.error(
-        `Erro ao buscar estabelecimentos no Elasticsearch: ${mensagemErro}`,
+        `Erro ao buscar estabelecimentos no Elasticsearch: ${tipo}${
+          typeof status === 'number' ? ` (HTTP ${status})` : ''
+        }`,
       );
       throw erro;
     }

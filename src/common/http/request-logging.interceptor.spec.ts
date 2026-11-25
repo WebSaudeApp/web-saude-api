@@ -22,13 +22,13 @@ describe('RequestLoggingInterceptor (BE-31 #53)', () => {
       method: 'GET',
       path: '/estabelecimentos',
       originalUrl:
-        '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=x',
-      url: '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=x',
+        '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=ClinicaSigilosaQ7',
+      url: '/estabelecimentos?lat=-8.05389&lng=-34.88111&especialidade=Cardiologia&termo=ClinicaSigilosaQ7',
       query: {
         lat: '-8.05389',
         lng: '-34.88111',
         especialidade: 'Cardiologia',
-        termo: 'x',
+        termo: 'ClinicaSigilosaQ7',
       },
     };
 
@@ -54,15 +54,15 @@ describe('RequestLoggingInterceptor (BE-31 #53)', () => {
     const logMsg = chamadas[0][0];
 
     // Deve conter a rota e os nomes dos parâmetros ordenados
-    expect(logMsg).toContain(
-      'GET /estabelecimentos [especialidade,lat,lng,termo] 200',
+    expect(logMsg).toMatch(
+      /^GET \/estabelecimentos \[especialidade,lat,lng,termo\] 200 \d+ms$/,
     );
 
     // NUNCA deve conter os valores sensíveis (coordenadas, termo, especialidade)
     expect(logMsg).not.toContain('-8.05389');
     expect(logMsg).not.toContain('-34.88111');
     expect(logMsg).not.toContain('Cardiologia');
-    expect(logMsg).not.toContain('termo=x');
+    expect(logMsg).not.toContain('ClinicaSigilosaQ7');
   });
 
   it('loga a rota e apenas os nomes dos parâmetros em caso de erro', async () => {
@@ -100,7 +100,7 @@ describe('RequestLoggingInterceptor (BE-31 #53)', () => {
     const chamadas = warnSpy.mock.calls as unknown as Array<[string]>;
     const logMsg = chamadas[0][0];
 
-    expect(logMsg).toContain('GET /estabelecimentos [lat,lng] failed');
+    expect(logMsg).toMatch(/^GET \/estabelecimentos \[lat,lng\] failed \d+ms$/);
     expect(logMsg).not.toContain('-8.05389');
     expect(logMsg).not.toContain('-34.88111');
   });
@@ -135,7 +135,6 @@ describe('RequestLoggingInterceptor (BE-31 #53)', () => {
     const chamadas = logSpy.mock.calls as unknown as Array<[string]>;
     const logMsg = chamadas[0][0];
 
-    expect(logMsg).toContain('GET /estabelecimentos/tipos 200');
-    expect(logMsg).not.toContain('[');
+    expect(logMsg).toMatch(/^GET \/estabelecimentos\/tipos 200 \d+ms$/);
   });
 });

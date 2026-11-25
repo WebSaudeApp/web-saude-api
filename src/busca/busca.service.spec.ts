@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
 import { BuscaService } from './busca.service';
 import {
@@ -56,37 +56,6 @@ describe('BuscaService', () => {
     const disponivel = await service.estaDisponivel();
     expect(disponivel).toBe(false);
     expect(elasticsearchMock.ping).toHaveBeenCalled();
-  });
-
-  it('ping com prazo usa requestTimeout próprio e sem retentativas', async () => {
-    const elasticsearchMock = { ping: jest.fn().mockResolvedValue(true) };
-    const service = new BuscaService(
-      elasticsearchMock as unknown as ElasticsearchService,
-    );
-
-    await service.estaDisponivel(1500);
-
-    expect(elasticsearchMock.ping).toHaveBeenCalledWith(
-      {},
-      { requestTimeout: 1500, maxRetries: 0 },
-    );
-  });
-
-  it('situacaoIndice: true = disponivel, false (404) = ausente, erro (403/timeout) = desconhecido', async () => {
-    const exists = jest
-      .fn()
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false)
-      .mockRejectedValueOnce(
-        Object.assign(new Error('security_exception'), { statusCode: 403 }),
-      );
-    const service = new BuscaService({
-      indices: { exists },
-    } as unknown as ElasticsearchService);
-
-    await expect(service.situacaoIndice(1500)).resolves.toBe('disponivel');
-    await expect(service.situacaoIndice(1500)).resolves.toBe('ausente');
-    await expect(service.situacaoIndice(1500)).resolves.toBe('desconhecido');
   });
 
   it('fornece acesso ao cliente do Elasticsearch', () => {
@@ -346,6 +315,40 @@ describe('BuscaService', () => {
   });
 
   describe('buscarEstabelecimentos', () => {
+    it('quando o ES falha, loga só o tipo e o status do erro, sem os valores da consulta (BE-31 #53)', async () => {
+      const erroEs = Object.assign(
+        new Error(
+          'search_phase_execution_exception: [termo: ClinicaSigilosaQ7] [lat: -8.05389, lon: -34.88111] [Cardiologia]',
+        ),
+        { name: 'ResponseError', statusCode: 503 },
+      );
+      const service = new BuscaService({
+        search: jest.fn().mockRejectedValue(erroEs),
+      } as unknown as ElasticsearchService);
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+
+      await expect(
+        service.buscarEstabelecimentos({
+          termo: 'ClinicaSigilosaQ7',
+          especialidade: 'Cardiologia',
+          localizacao: { lat: -8.05389, lon: -34.88111, raioKm: 5 },
+        }),
+      ).rejects.toBe(erroEs);
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [mensagem] = errorSpy.mock.calls[0] as [string];
+      expect(mensagem).toBe(
+        'Erro ao buscar estabelecimentos no Elasticsearch: ResponseError (HTTP 503)',
+      );
+      expect(mensagem).not.toContain('ClinicaSigilosaQ7');
+      expect(mensagem).not.toContain('8.05389');
+      expect(mensagem).not.toContain('34.88111');
+      expect(mensagem).not.toContain('Cardiologia');
+      errorSpy.mockRestore();
+    });
+
     it('executa busca com filtros textuais e retorna itens formatados', async () => {
       const elasticsearchMock = {
         search: jest.fn().mockResolvedValue({
