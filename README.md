@@ -412,9 +412,9 @@ web-saude-api/
 ### Logs sem dados de localização e busca (BE-31)
 
 - O que **nunca** deve ir para logs: coordenadas (`lat`, `lng`), termos de busca, especialidades, senha, JWT, refresh token, código de e-mail, token de recuperação, connection string.
-- **Formato:** cada request gera uma linha `MÉTODO /caminho [nomes_dos_parâmetros] status duração` (ex.: `GET /estabelecimentos [especialidade,lat,lng,termo] 200 12ms`). Entram só o caminho e os **nomes** dos parâmetros da query, em ordem alfabética; os **valores** nunca entram.
+- **Formato:** cada request gera uma linha `MÉTODO /rota [nomes_dos_parâmetros] status duração` (ex.: `GET /estabelecimentos [especialidade,lat,lng,termo] 200 12ms`). Entram só o molde da rota (ex.: `/estabelecimentos/:id`, sem o valor do `:id`) e os **nomes** dos parâmetros da query, em ordem alfabética; os **valores** nunca entram.
 - Só entram nomes que são identificadores (letra ou `_`, depois letras, dígitos ou `_`, até 40 caracteres). Os que não são (por exemplo, uma coordenada enviada sem `=`, como `?-8.05&-34.88`) viram um marcador com a contagem: `[?x2]`. Acima de 20 nomes válidos, o restante não entra no log.
-- Corpos e headers não são logados. Erros 500 e 503 vão para o logger com a mesma linha (sem valores) e sem stack na resposta HTTP. Quando a busca no Elasticsearch falha, o log leva só o tipo do erro e o status HTTP, não a mensagem do ES (que pode repetir trechos da consulta).
+- Corpos e headers não são logados. Erros 5xx vão para o logger com a mesma linha (sem valores) e sem stack na resposta HTTP. Quando a busca no Elasticsearch falha, o log leva só o tipo do erro, o status HTTP e o código do ES ou da rede (ex.: `index_not_found_exception`, `ECONNREFUSED`), não a mensagem do ES (que pode repetir trechos da consulta).
 
 #### Retenção dos logs
 

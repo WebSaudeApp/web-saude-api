@@ -66,6 +66,18 @@ describe('redact-log (BE-31 #53)', () => {
       expect(nomes[20]).toBe('?x1');
     });
 
+    it('com rota casada, loga o molde (`:id`) e não o valor posto no caminho', () => {
+      const log = sanitizarRotaLog({
+        path: '/estabelecimentos/-8.05389,-34.88111',
+        baseUrl: '',
+        route: { path: '/estabelecimentos/:id' },
+        query: {},
+      } as unknown as Request);
+
+      expect(log).toBe('/estabelecimentos/:id');
+      expect(log).not.toContain('8.05389');
+    });
+
     it('usa url sem query se path for indefinido', () => {
       const mockRequest = {
         url: '/health?check=true',

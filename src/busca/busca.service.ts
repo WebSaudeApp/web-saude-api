@@ -364,16 +364,36 @@ export class BuscaService implements OnModuleInit {
         totalPaginas: Math.ceil(totalHits / size),
       };
     } catch (erro) {
-      // A mensagem do ES pode repetir trechos da consulta (termo, coordenadas): o log
-      // leva só o tipo do erro e o status HTTP, nunca a mensagem (BE-31 #53).
-      const tipo = erro instanceof Error ? erro.name : 'Erro';
-      const status = (erro as { statusCode?: unknown } | null)?.statusCode;
       this.logger.error(
-        `Erro ao buscar estabelecimentos no Elasticsearch: ${tipo}${
-          typeof status === 'number' ? ` (HTTP ${status})` : ''
-        }`,
+        `Erro ao buscar estabelecimentos no Elasticsearch: ${descreverErroSemDados(erro)}`,
       );
       throw erro;
     }
   }
+}
+
+// Só identificadores fixos (ex.: `index_not_found_exception`, `ECONNREFUSED`) entram no log.
+const CODIGO_SEGURO = /^[A-Za-z_]{1,60}$/;
+
+/**
+ * Descreve uma falha do ES sem a mensagem, que pode repetir trechos da consulta (termo,
+ * coordenadas) (BE-31 #53): tipo do erro, status HTTP, tipo do erro do ES e código de rede.
+ */
+function descreverErroSemDados(erro: unknown): string {
+  const e = (erro ?? {}) as {
+    name?: unknown;
+    statusCode?: unknown;
+    code?: unknown;
+    meta?: { body?: { error?: { type?: unknown } } };
+  };
+  const partes: string[] = [
+    erro instanceof Error && CODIGO_SEGURO.test(erro.name) ? erro.name : 'Erro',
+  ];
+  if (typeof e.statusCode === 'number') partes.push(`HTTP ${e.statusCode}`);
+  const tipoEs = e.meta?.body?.error?.type;
+  if (typeof tipoEs === 'string' && CODIGO_SEGURO.test(tipoEs))
+    partes.push(tipoEs);
+  if (typeof e.code === 'string' && CODIGO_SEGURO.test(e.code))
+    partes.push(e.code);
+  return partes.join(' ');
 }
