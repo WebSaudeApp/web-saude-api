@@ -1,6 +1,6 @@
 # UC01 — Pesquisa de estabelecimentos
 
-Este documento descreve as alterações realizadas na busca do serviço de estabelecimentos e nas avaliações exibidas a partir do resultado, seguindo a especificação "UC01 – Pesquisar estabelecimentos de saúde" e as regras de paridade estrita entre PostgreSQL e Elasticsearch (D13, BE-30).
+Este documento descreve as alterações realizadas na busca do serviço de estabelecimentos, seguindo a especificação "UC01 – Pesquisar estabelecimentos de saúde" e as regras de paridade estrita entre PostgreSQL e Elasticsearch (D13, BE-30).
 
 ## Serviço de busca
 
@@ -22,12 +22,6 @@ O método `EstabelecimentosService.search()` aceita os filtros `termo`, `tipo`, 
 ## Detalhe do estabelecimento
 
 O método `EstabelecimentosService.findOne()` devolve o estabelecimento com endereço, coordenadas, especialidades, horários e mídias (passo 11, RN11, RN12). Um ID inexistente gera `404` com a mensagem "Estabelecimento não encontrado." (E8).
-
-## Avaliações de um resultado
-
-A rota `GET /estabelecimentos/{id}/reviews` chama `ReviewsService.listByEstabelecimento()` e devolve as avaliações da mais recente para a mais antiga, com nota, comentário, data e autor (A5). A paginação segue a mesma regra da busca: `pagina` e `limite`, 20 itens por padrão e resposta `{ dados, paginacao }` (RN08). Se o estabelecimento não existir, a resposta é `404` (E8).
-
-A listagem de avaliações por usuário (`GET /usuarios/{id}/reviews`) não faz parte do UC01 e continua com a paginação anterior (`page`, `limit` e `{ data, meta }`).
 
 ## Banco de dados
 
