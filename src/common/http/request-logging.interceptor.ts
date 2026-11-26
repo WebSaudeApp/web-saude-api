@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Observable, tap } from 'rxjs';
+import { sanitizarRotaLog } from './redact-log';
 
 @Injectable()
 export class RequestLoggingInterceptor implements NestInterceptor {
@@ -17,18 +18,18 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
     const startedAt = Date.now();
-    const path = request.originalUrl ?? request.url;
+    const rota = sanitizarRotaLog(request);
 
     return next.handle().pipe(
       tap({
         next: () => {
           this.logger.log(
-            `${request.method} ${path} ${response.statusCode} ${Date.now() - startedAt}ms`,
+            `${request.method} ${rota} ${response.statusCode} ${Date.now() - startedAt}ms`,
           );
         },
         error: () => {
           this.logger.warn(
-            `${request.method} ${path} failed ${Date.now() - startedAt}ms`,
+            `${request.method} ${rota} failed ${Date.now() - startedAt}ms`,
           );
         },
       }),

@@ -409,9 +409,17 @@ web-saude-api/
 - **ValidationPipe** — `whitelist`, `forbidNonWhitelisted`, `transform`
 - **Secrets** — somente no `.env`, nunca no código
 
-O que **nunca** deve ir para logs: senha, JWT, refresh token, código de e-mail, token de recuperação, connection string.
+### Logs sem dados de localização e busca (BE-31)
 
-Cada request autenticado ou público gera uma linha `METHOD /path status duração`. Corpos e headers sensíveis não são logados. Erros 500 vão para o logger sem stack na resposta HTTP.
+- O que **nunca** deve ir para logs: coordenadas (`lat`, `lng`), termos de busca, especialidades, senha, JWT, refresh token, código de e-mail, token de recuperação, connection string.
+- **Formato:** cada request gera uma linha `MÉTODO /rota [nomes_dos_parâmetros] status duração` (ex.: `GET /estabelecimentos [especialidade,lat,lng,termo] 200 12ms`). Entram só o molde da rota (ex.: `/estabelecimentos/:id`, sem o valor do `:id`) e os **nomes** dos parâmetros da query, em ordem alfabética; os **valores** nunca entram.
+- Só entram nomes que são identificadores (letra ou `_`, depois letras, dígitos ou `_`, até 40 caracteres). Os que não são (por exemplo, uma coordenada enviada sem `=`, como `?-8.05&-34.88`) viram um marcador com a contagem: `[?x2]`. Acima de 20 nomes válidos, o restante não entra no log.
+- Corpos e headers não são logados. Erros 5xx vão para o logger com a mesma linha (sem valores) e sem stack na resposta HTTP. Quando a busca no Elasticsearch falha, o log leva só a classe do erro, o status HTTP e o tipo do erro devolvido pelo ES (ex.: `ResponseError HTTP 404 index_not_found_exception`, ou só `ConnectionError` com o ES fora do ar), não a mensagem (que repete trechos da consulta).
+
+#### Retenção dos logs
+
+- **Teste (Render, plano gratuito):** **7 dias** no plano Hobby (gratuito), sem opção de configurar o prazo (fonte: [Render — Logs, "Retention period"](https://render.com/docs/logging), consultada em 25/11/2026). Confere com o painel: em 24/11/2026 os logs dos deploys de 01 e 02/11 já tinham expirado.
+- **Produção:** prazo de retenção a definir no checklist de deploy da BE-33 (#55).
 
 ---
 

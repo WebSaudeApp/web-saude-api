@@ -365,9 +365,32 @@ export class BuscaService implements OnModuleInit {
       };
     } catch (erro) {
       this.logger.error(
-        `Erro ao buscar estabelecimentos no Elasticsearch: ${String(erro)}`,
+        `Erro ao buscar estabelecimentos no Elasticsearch: ${descreverErroSemDados(erro)}`,
       );
       throw erro;
     }
   }
+}
+
+// Só identificadores fixos (ex.: `ResponseError`, `index_not_found_exception`) entram no log.
+const CODIGO_SEGURO = /^[A-Za-z_]{1,60}$/;
+
+/**
+ * Descreve uma falha do ES sem a mensagem, que pode repetir trechos da consulta (termo,
+ * coordenadas) (BE-31 #53): classe do erro, status HTTP e tipo do erro devolvido pelo ES.
+ */
+function descreverErroSemDados(erro: unknown): string {
+  const e = (erro ?? {}) as {
+    statusCode?: unknown;
+    meta?: { body?: { error?: { type?: unknown } } };
+  };
+  const partes: string[] = [
+    erro instanceof Error && CODIGO_SEGURO.test(erro.name) ? erro.name : 'Erro',
+  ];
+  if (typeof e.statusCode === 'number') partes.push(`HTTP ${e.statusCode}`);
+  const tipoEs = e.meta?.body?.error?.type;
+  if (typeof tipoEs === 'string' && CODIGO_SEGURO.test(tipoEs)) {
+    partes.push(tipoEs);
+  }
+  return partes.join(' ');
 }

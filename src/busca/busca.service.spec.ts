@@ -1,4 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
+import { errors } from '@elastic/elasticsearch';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
 import { BuscaService } from './busca.service';
 import {
@@ -9,6 +10,10 @@ import {
 import { DocumentoEstabelecimento } from './documento-estabelecimento';
 
 describe('BuscaService', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   const documentoValido: DocumentoEstabelecimento = {
     id: 'est-1',
     nome: 'Hospital Esperança',
@@ -315,6 +320,78 @@ describe('BuscaService', () => {
   });
 
   describe('buscarEstabelecimentos', () => {
+    it('quando o ES responde erro, loga classe, status e tipo do erro, sem os valores da consulta (BE-31 #53)', async () => {
+      // Erro real do cliente: a mensagem dele repete os `reason` do ES, que podem trazer a consulta.
+      const erroEs = new errors.ResponseError({
+        body: {
+          error: {
+            type: 'search_phase_execution_exception',
+            reason: 'all shards failed',
+            root_cause: [
+              {
+                type: 'query_shard_exception',
+                reason:
+                  'failed to create query: termo ClinicaSigilosaQ7 em -8.05389,-34.88111 Cardiologia',
+              },
+            ],
+          },
+        },
+        statusCode: 400,
+        headers: {},
+        warnings: null,
+        meta: {} as never,
+      });
+      expect(erroEs.message).toContain('ClinicaSigilosaQ7');
+      const service = new BuscaService({
+        search: jest.fn().mockRejectedValue(erroEs),
+      } as unknown as ElasticsearchService);
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+
+      await expect(
+        service.buscarEstabelecimentos({
+          termo: 'ClinicaSigilosaQ7',
+          especialidade: 'Cardiologia',
+          localizacao: { lat: -8.05389, lon: -34.88111, raioKm: 5 },
+        }),
+      ).rejects.toBe(erroEs);
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [mensagem] = errorSpy.mock.calls[0] as [string];
+      expect(mensagem).toBe(
+        'Erro ao buscar estabelecimentos no Elasticsearch: ResponseError HTTP 400 search_phase_execution_exception',
+      );
+      for (const valor of [
+        'ClinicaSigilosaQ7',
+        '8.05389',
+        '34.88111',
+        'Cardiologia',
+      ]) {
+        expect(mensagem).not.toContain(valor);
+      }
+    });
+
+    it('quando o ES está fora do ar, loga só a classe do erro de conexão (BE-31 #53)', async () => {
+      const erroRede = new errors.ConnectionError(
+        'connect ECONNREFUSED 10.0.0.1:9200',
+      );
+      const service = new BuscaService({
+        search: jest.fn().mockRejectedValue(erroRede),
+      } as unknown as ElasticsearchService);
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+
+      await expect(
+        service.buscarEstabelecimentos({ termo: 'ClinicaSigilosaQ7' }),
+      ).rejects.toBe(erroRede);
+
+      expect(errorSpy.mock.calls).toEqual([
+        ['Erro ao buscar estabelecimentos no Elasticsearch: ConnectionError'],
+      ]);
+    });
+
     it('executa busca com filtros textuais e retorna itens formatados', async () => {
       const elasticsearchMock = {
         search: jest.fn().mockResolvedValue({
